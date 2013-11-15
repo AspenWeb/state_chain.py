@@ -79,9 +79,9 @@ def buz(): return {'val': 3}
 
 
 # Lifecycle decorators
-# ===============
+# ====================
 
-from aspen.lifecycles.filters import by_lambda
+from lifecycle import by_lambda
 
 FOO_PY = '''
 def bar(): return {'val': 1}
@@ -102,4 +102,3 @@ def test_filter_a_lifecycle(sys_path):
 
     state = bar_lifecycle.run({'val': None})
     assert state == {'val': 4, 'exc_info': None, 'state': state, 'lifecycle': bar_lifecycle}
-
