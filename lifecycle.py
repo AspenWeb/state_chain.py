@@ -13,6 +13,8 @@ class FunctionNotFound(Exception):
 
 
 class Lifecycle(object):
+    """
+    """
 
     short_circuit = False
 
