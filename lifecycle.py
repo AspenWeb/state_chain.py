@@ -33,11 +33,22 @@ from dependency_injection import resolve_dependencies
 
 
 if sys.version_info >= (3, 0, 0):
-    _get_code = lambda f: f.__code__
+
+    _get_func_code = lambda f: f.__code__
+    _get_func_name = lambda f: f.__name__
+
+    def _transfer_func_name(to, from_):
+        to.__name__ = from_.__name__
+
     def exec_(some_python, namespace):
         exec(some_python, namespace)
 else:
-    _get_code = lambda f: f.func_code
+    _get_func_code = lambda f: f.func_code
+    _get_func_name = lambda f: f.func_name
+
+    def _transfer_func_name(to, from_):
+        to.func_name = from_.func_name
+
     def exec_(some_python, namespace):
         # Have to double-exec because the Python 2 form is SyntaxError in 3.
         exec("exec some_python in namespace")
@@ -64,7 +75,7 @@ class Lifecycle(object):
 
 
     def get_names(self):
-        return [f.func_name for f in self]
+        return [_get_func_name(f) for f in self]
 
 
     def insert_after(self, name, newfunc):
@@ -97,7 +108,7 @@ class Lifecycle(object):
         """
         func = None
         for func in self.functions:
-            if func.func_name == name:
+            if _get_func_name(func) == name:
                 break
         if func is None:
             raise FunctionNotFound(name)
@@ -118,7 +129,7 @@ class Lifecycle(object):
         if 'exc_info' not in state:     state['exc_info'] = None
 
         for function in self.functions:
-            function_name = function.func_name
+            function_name = _get_func_name(function)
             try:
                 deps = resolve_dependencies(function, state)
                 if 'exc_info' in deps.signature.required and state['exc_info'] is None:
@@ -170,7 +181,7 @@ class Lifecycle(object):
             if type(obj) != types.FunctionType:
                 continue
             func = obj
-            lineno = _get_code(func).co_firstlineno
+            lineno = _get_func_code(func).co_firstlineno
             functions_with_lineno.append((lineno, func))
         functions_with_lineno.sort()
         return [func for lineno, func in functions_with_lineno]
@@ -184,7 +195,7 @@ def by_lambda(filter_lambda):
         def wrapped_flow_step_by_lambda(*args,**kwargs):
             if filter_lambda():
                 return flow_step(*args,**kwargs)
-        wrapped_flow_step_by_lambda.func_name = flow_step.func_name
+        _transfer_func_name(wrapped_flow_step_by_lambda, flow_step)
         return wrapped_flow_step_by_lambda
     return wrap
 
@@ -218,7 +229,7 @@ def by_regex(regex_tuples, default=True):
                         return flow_step(*args)
             if default:
                 return flow_step(*args)
-        flow_step_filter.func_name = flow_step.func_name
+        _transfer_func_name(flow_step_filter, flow_step)
         return flow_step_filter
     return filter_flow_step
 
