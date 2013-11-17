@@ -29,8 +29,15 @@ import sys
 import types
 import traceback
 
-
 from dependency_injection import resolve_dependencies
+
+
+if sys.version_info >= (3, 0, 0):
+    def exec_(some_python, namespace):
+        exec(some_python, namespace)
+else:
+    def exec_(some_python, namespace):
+        exec some_python in namespace
 
 
 class FunctionNotFound(Exception):
@@ -143,7 +150,7 @@ class Lifecycle(object):
     def _load_module_from_dotted_name(self, dotted_name):
         class Module(object): pass
         module = Module()  # let's us use getattr to traverse down
-        exec 'import {0}'.format(dotted_name) in module.__dict__
+        exec_('import {0}'.format(dotted_name), module.__dict__)
         for name in dotted_name.split('.'):
             module = getattr(module, name)
         return module
