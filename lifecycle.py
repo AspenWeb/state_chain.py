@@ -8,6 +8,9 @@ import types
 import traceback
 
 
+from dependency_injection import resolve_dependencies
+
+
 class FunctionNotFound(Exception):
     def __str__(self):
         return "The function '{0}' isn't in this lifecycle.".format(*self.args)
@@ -85,15 +88,15 @@ class Lifecycle(object):
         for function in self.functions:
             function_name = function.func_name
             try:
-                deps = self._resolve_dependencies(function, state)
-                if 'exc_info' in deps.required and state['exc_info'] is None:
+                deps = resolve_dependencies(function, state)
+                if 'exc_info' in deps.signature.required and state['exc_info'] is None:
                     pass    # Hook needs an exc_info but we don't have it.
                     #print("{0:>48}  \x1b[33;1mskipped\x1b[0m".format(function_name))
-                elif 'exc_info' not in deps.names and state['exc_info'] is not None:
+                elif 'exc_info' not in deps.signature.parameters and state['exc_info'] is not None:
                     pass    # Hook doesn't want an exc_info but we have it.
                     #print("{0:>48}  \x1b[33;1mskipped\x1b[0m".format(function_name))
                 else:
-                    new_state = function(**deps.kw)
+                    new_state = function(**deps.as_kwargs)
                     #print("{0:>48}  \x1b[32;1mdone\x1b[0m".format(function_name))
                     if new_state is not None:
                         state.update(new_state)
