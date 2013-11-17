@@ -23,11 +23,12 @@ Introduction
 ------------
 
 This module provides an abstraction for implementing arbitrary algorithms as a
-list of functions that operate on a shared namespace, which makes it easy to
-arbitrarily modify the algorithm at run time and to provide cascading exception
-handling.
+list of functions that operate on a shared state dictionary. Algorithms defined
+this way are easy to arbitrarily modify at run time, and they provide cascading
+exception handling.
 
-First, define an algorithm by defining a series of functions in a Python file::
+To get started, define an algorithm by defining a series of functions in a
+Python file::
 
     def foo():
         return {'baz': 1}
@@ -39,7 +40,10 @@ First, define an algorithm by defining a series of functions in a Python file::
         return {'sum': baz + buz)
 
 
-Save this file on your ``PYTHONPATH`` as ``blah_algorithm.py``. Now here's how to use it:
+Each function returns a :py:class:`dict`, which is used to update the state of
+the current run of the algorithm. Names from the state dictionary are made
+available to downstream functions via :py:mod:`dependency_injection`. Save this
+file on your ``PYTHONPATH`` as ``blah_algorithm.py``. Now here's how to use it:
 
     >>> from algorithm import Algorithm
     >>> blah = Algorithm('blah_algorithm')
@@ -50,12 +54,8 @@ Python module. All of the functions defined in the module are loaded into a
 list, in the order they're defined in the file:
 
     >>> blah.functions #doctest: +ELLIPSIS
-    [<function foo at ...>, <function bar at ...>, <function bloo at ...>]
+    [<function foo ...>, <function bar ...>, <function bloo ...>]
 
-
-Each function returns a mapping, which is used to update the state of the
-current run of the algorithm. Names from the state dictionary are made
-available to downstream functions via :py:mod:`dependency_injection`.
 
 Now you can use :py:func:`~Algorithm.run` to run the algorithm. You'll get back
 a dictionary representing the algorithm's final state:
@@ -63,6 +63,48 @@ a dictionary representing the algorithm's final state:
     >>> state = blah.run()
     >>> state['sum']
     3
+
+
+Let's add two functions to the algorithm, to illustrate both algorithm
+modification and exception handling. First let's define the functions:
+
+    >>> def uh_oh(baz):
+    ...     if baz == 2:
+    ...         raise heck
+    ...
+    >>> def deal_with_it(exc_info):
+    ...     print(exc_info[1])
+    ...     return {'exc_info': None}
+    ...
+
+
+Now let's interpolate them into our algorithm. Let's put the ``uh_oh`` function between
+``bar`` and ``bloo``:
+
+    >>> blah.insert_before('bloo', uh_oh)
+
+
+Then let's add our exception handler at the end:
+
+    >>> blah.insert_after('bloo', deal_with_it)
+
+
+While we're at it, let's remove the ``foo`` function:
+
+    >>> blah.remove('foo')
+
+
+Now here's what our algorithm looks like:
+
+    >>> blah.functions #doctest: +ELLIPSIS
+    [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
+
+
+What happens when we run it now? Since we no longer have the ``foo`` function
+providing a value for ``bar``, we'll need to supply that:
+
+    >>> state = blah.run(baz=2)
+    global name 'heck' is not defined
 
 
 API Reference
@@ -145,7 +187,7 @@ class Algorithm(object):
     def insert_before(self, name, newfunc):
         """Insert newfunc in the list right before the function named name.
         """
-        self.insert_relative_to(name, newfunc, relative_position=-1)
+        self.insert_relative_to(name, newfunc, relative_position=0)
 
 
     def insert_relative_to(self, name, newfunc, relative_position):
@@ -173,15 +215,12 @@ class Algorithm(object):
         return func
 
 
-    def run(self, state=None, through=None):
+    def run(self, _through=None, **state):
         """Given a state dictionary, run through the functions in the list.
         """
-        if state is None:
-            state = {}
-
-        if through is not None:
-            if through not in self.get_names():
-                raise FunctionNotFound(through)
+        if _through is not None:
+            if _through not in self.get_names():
+                raise FunctionNotFound(_through)
         # XXX bring these back when we've sorted out logging
         #print()
 
@@ -210,7 +249,7 @@ class Algorithm(object):
                 if self.short_circuit:
                     raise
 
-            if through is not None and function_name == through:
+            if _through is not None and function_name == _through:
                 break
 
         if state['exc_info'] is not None:
