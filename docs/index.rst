@@ -1,6 +1,6 @@
-lifecycle.py
+algorithm.py
 ============
 
-.. automodule:: lifecycle
+.. automodule:: algorithm 
     :members:
     :member-order: bysource

@@ -3,13 +3,13 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 from setuptools import setup
 
 
-setup( name='lifecycle'
+setup( name='algorithm'
      , author='Gittip, LLC'
      , author_email='support@gittip.com'
-     , description="This library models a process lifecycle as a list of functions."
-     , url='http://lifecycle-py.readthedocs.org'
+     , description="Model an algorithm as a list of functions."
+     , url='http://algorithm-py.readthedocs.org'
      , version='0.0.0-dev'
-     , py_modules=['lifecycle']
+     , py_modules=['algorithm']
      , install_requires=['dependency_injection']
      , classifiers=[ 'Development Status :: 5 - Production/Stable'
                    , 'Intended Audience :: Developers'

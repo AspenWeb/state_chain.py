@@ -1,20 +1,21 @@
-"""Model a process lifecycle as a list of functions.
+"""Model an algorithm as a list of functions.
+
 
 Installation
 ------------
 
-:py:mod:`lifecycle` is available on `GitHub`_ and on `PyPI`_::
+:py:mod:`algorithm` is available on `GitHub`_ and on `PyPI`_::
 
-    $ pip install lifecycle
+    $ pip install algorithm
 
-We `test <https://travis-ci.org/gittip/lifecycle.py>`_ against
+We `test <https://travis-ci.org/gittip/algorithm.py>`_ against
 Python 2.6, 2.7, 3.2, and 3.3.
 
-:py:mod:`lifecycle` is in the `public domain`_.
+:py:mod:`algorithm` is in the `public domain`_.
 
 
-.. _GitHub: https://github.com/gittip/lifecycle.py
-.. _PyPI: https://pypi.python.org/pypi/lifecycle
+.. _GitHub: https://github.com/gittip/algorithm.py
+.. _PyPI: https://pypi.python.org/pypi/algorithm
 .. _public domain: http://creativecommons.org/publicdomain/zero/1.0/
 
 
@@ -79,16 +80,14 @@ else:
 
 class FunctionNotFound(Exception):
     def __str__(self):
-        return "The function '{0}' isn't in this lifecycle.".format(*self.args)
+        return "The function '{0}' isn't in this algorithm.".format(*self.args)
 
 
-class Lifecycle(object):
-    """Represent a process lifecycle.
+class Algorithm(object):
+    """Model an algorithm as a list of functions.
 
     :param dotted_name: The dotted name of a Python module containing the
-        lifecycle definition.
-
-    The
+        algorithm definition.
 
     """
 
@@ -153,7 +152,7 @@ class Lifecycle(object):
         # XXX bring these back when we've sorted out logging
         #print()
 
-        if 'lifecycle' not in state:    state['lifecycle'] = self
+        if 'algorithm' not in state:    state['algorithm'] = self
         if 'state' not in state:        state['state'] = state
         if 'exc_info' not in state:     state['exc_info'] = None
 

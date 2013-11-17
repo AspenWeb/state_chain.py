@@ -1,3 +1,3 @@
 #!/bin/sh
-python lifecycle.py -v
+python algorithm.py
 py.test -v tests.py

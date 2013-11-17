@@ -1,1 +1,1 @@
-http://lifecycle-py.rtfd.org/
+http://algorithm-py.rtfd.org/
