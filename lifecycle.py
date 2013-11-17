@@ -1,4 +1,26 @@
 """Model a process lifecycle as a list of functions.
+
+Installation
+------------
+
+:py:mod:`lifecycle` is available on `GitHub`_ and on `PyPI`_::
+
+    $ pip install lifecycle
+
+We `test <https://travis-ci.org/gittip/lifecycle.py>`_ against
+Python 2.6, 2.7, 3.2, and 3.3.
+
+:py:mod:`lifecycle` is in the `public domain`_.
+
+
+.. _GitHub: https://github.com/gittip/lifecycle.py
+.. _PyPI: https://pypi.python.org/pypi/lifecycle
+.. _public domain: http://creativecommons.org/publicdomain/zero/1.0/
+
+
+API
+---
+
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
