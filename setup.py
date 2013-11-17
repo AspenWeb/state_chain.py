@@ -10,7 +10,7 @@ setup( name='lifecycle'
      , url='http://lifecycle-py.readthedocs.org'
      , version='0.0.0-dev'
      , py_modules=['lifecycle']
-     , install_requires=['dependency_injection']
+     , requires=['dependency_injection']
      , classifiers=[ 'Development Status :: 5 - Production/Stable'
                    , 'Intended Audience :: Developers'
                    , 'License :: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication'
