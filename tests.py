@@ -1,6 +1,36 @@
-import pytest
-from lifecycle import Lifecycle, FunctionNotFound
+import sys
 
+from pytest import raises, yield_fixture
+from lifecycle import Lifecycle, FunctionNotFound
+from filesystem_tree import FilesystemTree
+
+
+# fixtures
+# ========
+
+@yield_fixture
+def fs():
+    fs = FilesystemTree()
+    yield fs
+    fs.remove()
+
+@yield_fixture
+def module_scrubber():
+    before = set(sys.modules.keys())
+    yield
+    after = set(sys.modules.keys())
+    for name in after - before:
+        del sys.modules[name]
+
+@yield_fixture
+def sys_path(fs, module_scrubber):
+    sys.path.insert(0, fs.root)
+    yield fs
+    sys.path = sys.path[1:]
+
+
+# tests
+# =====
 
 def test_Lifecycle_can_be_instantiated(sys_path):
     sys_path.mk(('foo/__init__.py', ''), ('foo/bar.py', 'def baz(): pass'))
@@ -59,7 +89,7 @@ def baz(): return {'val': 2}
 def buz(): return {'val': 3}
 '''))
     bar_lifecycle = Lifecycle('foo')
-    pytest.raises(FunctionNotFound, bar_lifecycle.run, {'val': None}, through='blaaaaaah')
+    raises(FunctionNotFound, bar_lifecycle.run, {'val': None}, through='blaaaaaah')
 
 
 def test_inserted_lifecycle_steps_run(sys_path):
