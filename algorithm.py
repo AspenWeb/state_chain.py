@@ -19,12 +19,13 @@ Python 2.6, 2.7, 3.2, and 3.3.
 .. _public domain: http://creativecommons.org/publicdomain/zero/1.0/
 
 
-Tutorial
---------
+Introduction
+------------
 
 This module provides an abstraction for implementing arbitrary algorithms as a
-list of functions that operate on a shared namespace. This makes it easy to
-arbitrarily modify the algorithm at run time.
+list of functions that operate on a shared namespace, which makes it easy to
+arbitrarily modify the algorithm at run time and to provide cascading exception
+handling.
 
 First, define an algorithm by defining a series of functions in a Python file::
 
@@ -35,11 +36,33 @@ First, define an algorithm by defining a series of functions in a Python file::
         return {'buz': 2}
 
     def bloo(baz, buz):
-        print(baz + buz)
+        return {'sum': baz + buz)
 
-Save this file on ``PYTHONPATH`` as ``foo_algorithm.py``. Now here's how to use it:
+
+Save this file on your ``PYTHONPATH`` as ``blah_algorithm.py``. Now here's how to use it:
 
     >>> from algorithm import Algorithm
+    >>> blah = Algorithm('blah_algorithm')
+
+
+When you instantiate :py:class:`Algorithm` you give it the dotted path to a
+Python module. All of the functions defined in the module are loaded into a
+list, in the order they're defined in the file:
+
+    >>> blah.functions #doctest: +ELLIPSIS
+    [<function foo at ...>, <function bar at ...>, <function bloo at ...>]
+
+
+Each function returns a mapping, which is used to update the state of the
+current run of the algorithm. Names from the state dictionary are made
+available to downstream functions via :py:mod:`dependency_injection`.
+
+Now you can use :py:func:`~Algorithm.run` to run the algorithm. You'll get back
+a dictionary representing the algorithm's final state:
+
+    >>> state = blah.run()
+    >>> state['sum']
+    3
 
 
 API Reference
@@ -88,6 +111,13 @@ class Algorithm(object):
 
     :param dotted_name: The dotted name of a Python module containing the
         algorithm definition.
+
+
+    Each function in your algorithm must return a mapping or :py:class:`None`.
+    If it returns a mapping, that will be used to update the state of the
+    current run of the algorithm. Functions in the algorithm can use any name
+    from the current state as a parameter, and the values will then be supplied
+    via :py:mod:`depedency_injection`.
 
     """
 
@@ -143,9 +173,12 @@ class Algorithm(object):
         return func
 
 
-    def run(self, state, through=None):
+    def run(self, state=None, through=None):
         """Given a state dictionary, run through the functions in the list.
         """
+        if state is None:
+            state = {}
+
         if through is not None:
             if through not in self.get_names():
                 raise FunctionNotFound(through)
@@ -277,3 +310,8 @@ def by_dict(truthdict, default=True):
         flow_step_filter.func_name = flow_step.func_name
         return flow_step_filter
     return filter_flow_step
+
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
