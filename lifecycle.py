@@ -33,9 +33,11 @@ from dependency_injection import resolve_dependencies
 
 
 if sys.version_info >= (3, 0, 0):
+    _get_code = lambda f: f.__code__
     def exec_(some_python, namespace):
         exec(some_python, namespace)
 else:
+    _get_code = lambda f: f.func_code
     def exec_(some_python, namespace):
         # Have to double-exec because the Python 2 form is SyntaxError in 3.
         exec("exec some_python in namespace")
@@ -168,7 +170,7 @@ class Lifecycle(object):
             if type(obj) != types.FunctionType:
                 continue
             func = obj
-            lineno = func.func_code.co_firstlineno
+            lineno = _get_code(func).co_firstlineno
             functions_with_lineno.append((lineno, func))
         functions_with_lineno.sort()
         return [func for lineno, func in functions_with_lineno]
