@@ -117,7 +117,7 @@ class Algorithm(object):
     If it returns a mapping, that will be used to update the state of the
     current run of the algorithm. Functions in the algorithm can use any name
     from the current state as a parameter, and the values will then be supplied
-    via :py:mod:`depedency_injection`.
+    via :py:mod:`dependency_injection`.
 
     """
 
