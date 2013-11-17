@@ -18,6 +18,29 @@ Python 2.6, 2.7, 3.2, and 3.3.
 .. _public domain: http://creativecommons.org/publicdomain/zero/1.0/
 
 
+Tutorial
+--------
+
+This module provides an abstraction for implementing arbitrary algorithms as a
+list of functions that operate on a shared namespace. This makes it easy to
+arbitrarily modify the algorithm at run time.
+
+First, define an algorithm by defining a series of functions in a Python file::
+
+    def foo():
+        return {'baz': 1}
+
+    def bar():
+        return {'buz': 2}
+
+    def bloo(baz, buz):
+        print(baz + buz)
+
+Save this file on ``PYTHONPATH`` as ``foo_algorithm.py``. Now here's how to use it:
+
+    >>> from algorithm import Algorithm
+
+
 API Reference
 -------------
 
@@ -61,6 +84,12 @@ class FunctionNotFound(Exception):
 
 class Lifecycle(object):
     """Represent a process lifecycle.
+
+    :param dotted_name: The dotted name of a Python module containing the
+        lifecycle definition.
+
+    The
+
     """
 
     short_circuit = False
