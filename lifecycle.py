@@ -37,7 +37,8 @@ if sys.version_info >= (3, 0, 0):
         exec(some_python, namespace)
 else:
     def exec_(some_python, namespace):
-        exec some_python in namespace
+        # Have to double-exec because the Python 2 form is SyntaxError in 3.
+        exec("exec some_python in namespace")
 
 
 class FunctionNotFound(Exception):
