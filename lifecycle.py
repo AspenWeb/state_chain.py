@@ -39,7 +39,7 @@ class FunctionNotFound(Exception):
 
 
 class Lifecycle(object):
-    """
+    """Represent a process lifecycle.
     """
 
     short_circuit = False
