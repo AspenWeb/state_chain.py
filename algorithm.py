@@ -173,8 +173,8 @@ class FunctionNotFound(Exception):
 class Algorithm(object):
     """Model an algorithm as a list of functions.
 
-    :param dotted_name: The dotted name of a Python module containing the
-        algorithm definition.
+    :param dotted_name: the dotted name of a Python module containing the
+        algorithm definition
 
     An algorithm definition is a regular Python file. All functions defined in
     the file whose name doesn't begin with ``_`` are loaded into a list at
@@ -190,7 +190,7 @@ class Algorithm(object):
 
     """
 
-    short_circuit = False #: Whether to raise exceptions immediately.
+    short_circuit = False #: Whether to re-raise exceptions immediately.
 
     def __init__(self, dotted_name):
         self.module = self._load_module_from_dotted_name(dotted_name)
@@ -251,7 +251,7 @@ class Algorithm(object):
     def run(self, _through=None, **state):
         """Run through the functions in the :py:attr:`functions` list.
 
-        :param _through: if not ``None``, return after reaching the function
+        :param _through: if not ``None``, return after calling the function
             with this name
 
         :param state: remaining keyword arguments are used for the initial
@@ -277,6 +277,27 @@ class Algorithm(object):
         is that any function that raises an exception will cause us to
         fast-forward to the next exception-handling function in the list.
 
+        Here are some further notes on exception handling:
+
+         - If your function provides a default value for ``exc_info``, then it
+           will be called whether or not there is an exception being handled.
+
+         - You should return ``{'exc_info': None}`` to reset exception
+           handling. We call :py:func:`sys.exc_clear` for you in this case.
+
+         - As advised in the Python docs for :py:func:`sys.exc_info`, we avoid
+           assigning the third item of the return value of that function, a
+           traceback object, to a local variable. Instead, we replace it with a
+           string representation of the traceback. Your handler should call
+           :func:`sys.exc_info` directly if you need the full traceback object.
+
+         - If ``exc_info`` is not ``None`` after all functions have been run,
+           then we re-raise the current exception.
+
+         - If you set :attr:`short_circuit` to ``True``, then we re-raise any
+           exception immediately instead of fast-forwarding to the next
+           exception handler.
+
         """
         if _through is not None:
             if _through not in self.get_names():
@@ -292,16 +313,20 @@ class Algorithm(object):
             function_name = _get_func_name(function)
             try:
                 deps = resolve_dependencies(function, state)
-                if 'exc_info' in deps.signature.required and state['exc_info'] is None:
-                    pass    # Hook needs an exc_info but we don't have it.
+                have_exc_info = state['exc_info'] is None
+                if 'exc_info' in deps.signature.required and not have_exc_info:
+                    pass    # Function wants exc_info but we don't have it.
                     #print("{0:>48}  \x1b[33;1mskipped\x1b[0m".format(function_name))
-                elif 'exc_info' not in deps.signature.parameters and state['exc_info'] is not None:
-                    pass    # Hook doesn't want an exc_info but we have it.
+                elif 'exc_info' not in deps.signature.parameters and have_exc_info:
+                    pass    # Function doesn't want exc_info but we have it.
                     #print("{0:>48}  \x1b[33;1mskipped\x1b[0m".format(function_name))
                 else:
                     new_state = function(**deps.as_kwargs)
                     #print("{0:>48}  \x1b[32;1mdone\x1b[0m".format(function_name))
                     if new_state is not None:
+                        if 'exc_info' in new_state:
+                            if new_state['exc_info']:
+                                sys.exc_clear()
                         state.update(new_state)
             except:
                 #print("{0:>48}  \x1b[31;1mfailed\x1b[0m".format(function_name))
