@@ -102,7 +102,7 @@ Just for kicks, let's remove the ``foo`` function while we're at it:
 
 What happens when we run it? Since we no longer have the ``foo`` function
 providing a value for ``bar``, we'll need to supply that using a keyword
-argument to :py:func:`~Algorithm.run`.
+argument to :py:func:`~Algorithm.run`:
 
     >>> state = blah.run(baz=2)
     global name 'heck' is not defined
@@ -111,10 +111,10 @@ argument to :py:func:`~Algorithm.run`.
 The ``global name`` print statement came from our ``deal_with_it`` function.
 Whenever a function raises an exception, like ``uh_oh`` did,
 :py:class:`~Algorithm.run` captures the exception and populates an ``exc_info``
-key in the current algorithm run state. While ``exc_info`` is not ``None``, any
-normal function is skipped, and only functions that ask for ``exc_info`` get
-called. So in our example ``deal_with_it`` got called, but ``bloo`` didn't,
-which is why there is no ``sum``:
+key in the current algorithm run state dictionary. While ``exc_info`` is not
+``None``, any normal function is skipped, and only functions that ask for
+``exc_info`` get called. So in our example ``deal_with_it`` got called, but
+``bloo`` didn't, which is why there is no ``sum``:
 
     >>> 'sum' in state
     False
