@@ -164,6 +164,8 @@ else:
 
 
 class FunctionNotFound(Exception):
+    """Used when a function is not found in an algorithm function list.
+    """
     def __str__(self):
         return "The function '{0}' isn't in this algorithm.".format(*self.args)
 
@@ -174,7 +176,6 @@ class Algorithm(object):
     :param dotted_name: The dotted name of a Python module containing the
         algorithm definition.
 
-
     An algorithm definition is a regular Python file. All functions defined in
     the file whose name doesn't begin with ``_`` are loaded into a list at
     :py:attr:`functions` in the order they're defined in the file.
@@ -184,11 +185,12 @@ class Algorithm(object):
     dictionary for the current run of the algorithm. Functions in the algorithm
     can use any name from the current state dictionary as a parameter, and the
     value will then be supplied dynamically via :py:mod:`dependency_injection`.
-    See the `tutorial`_ for an example.
+    See the `tutorial`_ for an example, and see the :py:func:`run` method for
+    details on exception handling.
 
     """
 
-    short_circuit = False
+    short_circuit = False #: Whether to raise exceptions immediately.
 
     def __init__(self, dotted_name):
         self.module = self._load_module_from_dotted_name(dotted_name)
@@ -200,19 +202,34 @@ class Algorithm(object):
 
 
     def get_names(self):
+        """Returns a list of the names of the functions in the :py:attr:`functions` list.
+        """
         return [_get_func_name(f) for f in self]
 
 
+    def get_function(self, name):
+        """Return the function in the :py:attr:`functions` list named ``name``, or raise
+        :py:exc:`FunctionNotFound`.
+        """
+        func = None
+        for func in self.functions:
+            if _get_func_name(func) == name:
+                break
+        if func is None:
+            raise FunctionNotFound(name)
+        return func
+
+
     def insert_after(self, name, newfunc):
-        """Insert ``newfunc`` in the :py:attr:`functions` list right after the function named
-        ``name``.
+        """Insert ``newfunc`` in the :py:attr:`functions` list after the function named
+        ``name``, or raise :py:exc:`FunctionNotFound`.
         """
         self.insert_relative_to(name, newfunc, relative_position=1)
 
 
     def insert_before(self, name, newfunc):
-        """Insert ``newfunc`` in the :py:attr:`functions` list right before the function named
-        ``name``.
+        """Insert ``newfunc`` in the :py:attr:`functions` list before the function named
+        ``name``, or raise :py:exc:`FunctionNotFound`.
         """
         self.insert_relative_to(name, newfunc, relative_position=0)
 
@@ -224,27 +241,42 @@ class Algorithm(object):
 
 
     def remove(self, name):
-        """Remove the function named ``name`` from the :py:attr:`functions` list.
+        """Remove the function named ``name`` from the :py:attr:`functions` list, or raise
+        :py:exc:`FunctionNotFound`.
         """
         func = self.get_function(name)
         self.functions.remove(func)
 
 
-    def get_function(self, name):
-        """Given the name of a function in the :py:attr:`functions` list, return the function
-        itself.
-        """
-        func = None
-        for func in self.functions:
-            if _get_func_name(func) == name:
-                break
-        if func is None:
-            raise FunctionNotFound(name)
-        return func
-
-
     def run(self, _through=None, **state):
-        """Given a state dictionary, run through the functions in the list.
+        """Run through the functions in the :py:attr:`functions` list.
+
+        :param _through: if not ``None``, return after reaching the function
+            with this name
+
+        :param state: remaining keyword arguments are used for the initial
+            state dictionary for this run of the algorithm
+
+        :raises: :py:exc:`FunctionNotFound`, if there is no function named
+            ``_through``
+
+        :returns: a dictionary representing the final algorithm state
+
+        The state dictionary is initialized with three items (their default
+        values can be overriden using keyword arguments to :py:func:`run`):
+
+         - ``algorithm`` - a reference to the parent :py:class:`Algorithm` instance
+         - ``state`` - a circular reference to the state dictionary
+         - ``exc_info`` - ``None``
+
+        For each function in the :py:attr:`functions` list, we look at the
+        function signature and compare it to the current value of ``exc_info``
+        in the state dictionary. If ``exc_info`` is ``None`` then we skip any
+        function that asks for ``exc_info``, and if ``exc_info`` is *not*
+        ``None`` then we only call functions that *do* ask for it. The upshot
+        is that any function that raises an exception will cause us to
+        fast-forward to the next exception-handling function in the list.
+
         """
         if _through is not None:
             if _through not in self.get_names():
