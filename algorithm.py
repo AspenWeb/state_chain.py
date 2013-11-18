@@ -140,6 +140,9 @@ import traceback
 from dependency_injection import resolve_dependencies
 
 
+__version__ = '0.0.0-dev'
+
+
 if sys.version_info >= (3, 0, 0):
 
     _get_func_code = lambda f: f.__code__
@@ -311,7 +314,7 @@ class Algorithm(object):
             function_name = _get_func_name(function)
             try:
                 deps = resolve_dependencies(function, state)
-                have_exc_info = state['exc_info'] is None
+                have_exc_info = state['exc_info'] is not None
                 if 'exc_info' in deps.signature.required and not have_exc_info:
                     pass    # Function wants exc_info but we don't have it.
                 elif 'exc_info' not in deps.signature.parameters and have_exc_info:
@@ -320,7 +323,7 @@ class Algorithm(object):
                     new_state = function(**deps.as_kwargs)
                     if new_state is not None:
                         if 'exc_info' in new_state:
-                            if new_state['exc_info']:
+                            if new_state['exc_info'] is None:
                                 sys.exc_clear()
                         state.update(new_state)
             except:
