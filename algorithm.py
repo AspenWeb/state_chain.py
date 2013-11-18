@@ -140,7 +140,7 @@ import traceback
 from dependency_injection import resolve_dependencies
 
 
-__version__ = '0.0.0-dev'
+__version__ = '1.0.0rc1'
 
 
 if sys.version_info >= (3, 0, 0):
