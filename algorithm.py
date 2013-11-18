@@ -175,11 +175,16 @@ class Algorithm(object):
         algorithm definition.
 
 
+    An algorithm definition is a regular Python file. All functions defined in
+    the file whose name doesn't begin with ``_`` are loaded into a list at
+    :py:attr:`functions` in the order they're defined in the file.
+
     Each function in your algorithm must return a mapping or :py:class:`None`.
-    If it returns a mapping, that will be used to update the state of the
-    current run of the algorithm. Functions in the algorithm can use any name
-    from the current state as a parameter, and the values will then be supplied
-    via :py:mod:`dependency_injection`.
+    If it returns a mapping, the mapping will be used to update a state
+    dictionary for the current run of the algorithm. Functions in the algorithm
+    can use any name from the current state dictionary as a parameter, and the
+    value will then be supplied dynamically via :py:mod:`dependency_injection`.
+    See the `tutorial`_ for an example.
 
     """
 
@@ -187,7 +192,7 @@ class Algorithm(object):
 
     def __init__(self, dotted_name):
         self.module = self._load_module_from_dotted_name(dotted_name)
-        self.functions = self._load_functions_from_module(self.module)
+        self.functions = self._load_functions_from_module(self.module) #: A list of functions.
 
 
     def __iter__(self):
@@ -199,32 +204,35 @@ class Algorithm(object):
 
 
     def insert_after(self, name, newfunc):
-        """Insert newfunc in the list right after the function named name.
+        """Insert ``newfunc`` in the :py:attr:`functions` list right after the function named
+        ``name``.
         """
         self.insert_relative_to(name, newfunc, relative_position=1)
 
 
     def insert_before(self, name, newfunc):
-        """Insert newfunc in the list right before the function named name.
+        """Insert ``newfunc`` in the :py:attr:`functions` list right before the function named
+        ``name``.
         """
         self.insert_relative_to(name, newfunc, relative_position=0)
 
 
     def insert_relative_to(self, name, newfunc, relative_position):
-        func = self.resolve_name_to_function(name)
+        func = self.get_function(name)
         index = self.functions.index(func) + relative_position
         self.functions.insert(index, newfunc)
 
 
     def remove(self, name):
-        """Remove the function named name from the list.
+        """Remove the function named ``name`` from the :py:attr:`functions` list.
         """
-        func = self.resolve_name_to_function(name)
+        func = self.get_function(name)
         self.functions.remove(func)
 
 
-    def resolve_name_to_function(self, name):
-        """Given the name of a function in the list, return the function itself.
+    def get_function(self, name):
+        """Given the name of a function in the :py:attr:`functions` list, return the function
+        itself.
         """
         func = None
         for func in self.functions:
@@ -282,8 +290,8 @@ class Algorithm(object):
     # ================================
 
     def _load_module_from_dotted_name(self, dotted_name):
-        class Module(object): pass
-        module = Module()  # let's us use getattr to traverse down
+        class RootModule(object): pass
+        module = RootModule()  # let's us use getattr to traverse down
         exec_('import {0}'.format(dotted_name), module.__dict__)
         for name in dotted_name.split('.'):
             module = getattr(module, name)
