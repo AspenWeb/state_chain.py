@@ -302,8 +302,6 @@ class Algorithm(object):
         if _through is not None:
             if _through not in self.get_names():
                 raise FunctionNotFound(_through)
-        # XXX bring these back when we've sorted out logging
-        #print()
 
         if 'algorithm' not in state:    state['algorithm'] = self
         if 'state' not in state:        state['state'] = state
@@ -316,20 +314,16 @@ class Algorithm(object):
                 have_exc_info = state['exc_info'] is None
                 if 'exc_info' in deps.signature.required and not have_exc_info:
                     pass    # Function wants exc_info but we don't have it.
-                    #print("{0:>48}  \x1b[33;1mskipped\x1b[0m".format(function_name))
                 elif 'exc_info' not in deps.signature.parameters and have_exc_info:
                     pass    # Function doesn't want exc_info but we have it.
-                    #print("{0:>48}  \x1b[33;1mskipped\x1b[0m".format(function_name))
                 else:
                     new_state = function(**deps.as_kwargs)
-                    #print("{0:>48}  \x1b[32;1mdone\x1b[0m".format(function_name))
                     if new_state is not None:
                         if 'exc_info' in new_state:
                             if new_state['exc_info']:
                                 sys.exc_clear()
                         state.update(new_state)
             except:
-                #print("{0:>48}  \x1b[31;1mfailed\x1b[0m".format(function_name))
                 state['exc_info'] = sys.exc_info()[:2] + (traceback.format_exc().strip(),)
                 if self.short_circuit:
                     raise
