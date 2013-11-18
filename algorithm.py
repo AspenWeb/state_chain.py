@@ -19,8 +19,8 @@ Python 2.6, 2.7, 3.2, and 3.3.
 .. _public domain: http://creativecommons.org/publicdomain/zero/1.0/
 
 
-Introduction
-------------
+Tutorial
+--------
 
 This module provides an abstraction for implementing arbitrary algorithms as a
 list of functions that operate on a shared state dictionary. Algorithms defined
@@ -82,29 +82,49 @@ Now let's interpolate them into our algorithm. Let's put the ``uh_oh`` function 
 ``bar`` and ``bloo``:
 
     >>> blah.insert_before('bloo', uh_oh)
+    >>> blah.functions #doctest: +ELLIPSIS
+    [<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>]
 
 
 Then let's add our exception handler at the end:
 
     >>> blah.insert_after('bloo', deal_with_it)
+    >>> blah.functions #doctest: +ELLIPSIS
+    [<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
 
 
-While we're at it, let's remove the ``foo`` function:
+Just for kicks, let's remove the ``foo`` function while we're at it:
 
     >>> blah.remove('foo')
-
-
-Now here's what our algorithm looks like:
-
     >>> blah.functions #doctest: +ELLIPSIS
     [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
 
 
-What happens when we run it now? Since we no longer have the ``foo`` function
-providing a value for ``bar``, we'll need to supply that:
+What happens when we run it? Since we no longer have the ``foo`` function
+providing a value for ``bar``, we'll need to supply that using a keyword
+argument to :py:func:`~Algorithm.run`.
 
     >>> state = blah.run(baz=2)
     global name 'heck' is not defined
+
+
+The ``global name`` print statement came from our ``deal_with_it`` function.
+Whenever a function raises an exception, like ``uh_oh`` did,
+:py:class:`~Algorithm.run` captures the exception and populates an ``exc_info``
+key in the current algorithm run state. While ``exc_info`` is not ``None``, any
+normal function is skipped, and only functions that ask for ``exc_info`` get
+called. So in our example ``deal_with_it`` got called, but ``bloo`` didn't,
+which is why there is no ``sum``:
+
+    >>> 'sum' in state
+    False
+
+
+If we run without tripping the exception in ``uh_oh`` then we have ``sum`` at
+the end:
+
+    >>> blah.run(baz=5)['sum']
+    7
 
 
 API Reference
