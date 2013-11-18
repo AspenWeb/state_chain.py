@@ -108,29 +108,3 @@ def buz(): return {'val': 3}
     state = bar_algorithm.run(val=None)
 
     assert state == {'val': 4, 'exc_info': None, 'state': state, 'algorithm':bar_algorithm}
-
-
-# Algorithm decorators
-# ====================
-
-from algorithm import by_lambda
-
-FOO_PY = '''
-def bar(): return {'val': 1}
-def baz(): return {'val': 2}
-def buz(): return {'val': 3}
-'''
-
-def test_filter_a_algorithm(sys_path):
-    sys_path.mk(('foo.py', FOO_PY))
-    bar_algorithm = Algorithm('foo')
-
-    @by_lambda(lambda: True)
-    def biz():
-        print("in biz")
-        return {'val': 4}
-
-    bar_algorithm.insert_after('buz', biz)
-
-    state = bar_algorithm.run(val=None)
-    assert state == {'val': 4, 'exc_info': None, 'state': state, 'algorithm': bar_algorithm}

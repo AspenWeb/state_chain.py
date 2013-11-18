@@ -133,7 +133,6 @@ API Reference
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import re
 import sys
 import types
 import traceback
@@ -152,6 +151,7 @@ if sys.version_info >= (3, 0, 0):
     def exec_(some_python, namespace):
         exec(some_python, namespace)
 else:
+
     _get_func_code = lambda f: f.func_code
     _get_func_name = lambda f: f.func_name
 
@@ -364,72 +364,3 @@ class Algorithm(object):
             functions_with_lineno.append((lineno, func))
         functions_with_lineno.sort()
         return [func for lineno, func in functions_with_lineno]
-
-
-# Filters
-# =======
-
-def by_lambda(filter_lambda):
-    def wrap(flow_step):
-        def wrapped_flow_step_by_lambda(*args,**kwargs):
-            if filter_lambda():
-                return flow_step(*args,**kwargs)
-        _transfer_func_name(wrapped_flow_step_by_lambda, flow_step)
-        return wrapped_flow_step_by_lambda
-    return wrap
-
-
-def by_regex(regex_tuples, default=True):
-    """A filter for flow steps.
-
-    regex_tuples is a list of (regex, filter?) where if the regex matches the
-    requested URI, then the flow is applied or not based on if filter? is True
-    or False.
-
-    For example:
-
-        from aspen.flows.filter import by_regex
-
-        @by_regex( ( ("/secret/agenda", True), ( "/secret.*", False ) ) )
-        def use_public_formatting(request):
-            ...
-
-    would call the 'use_public_formatting' flow step only on /secret/agenda
-    and any other URLs not starting with /secret.
-
-    """
-    regex_res = [ (re.compile(regex), disposition) \
-                           for regex, disposition in regex_tuples.iteritems() ]
-    def filter_flow_step(flow_step):
-        def flow_step_filter(request, *args):
-            for regex, disposition in regex_res:
-                if regex.matches(request.line.uri):
-                    if disposition:
-                        return flow_step(*args)
-            if default:
-                return flow_step(*args)
-        _transfer_func_name(flow_step_filter, flow_step)
-        return flow_step_filter
-    return filter_flow_step
-
-
-def by_dict(truthdict, default=True):
-    """A filter for hooks.
-
-    truthdict is a mapping of URI -> filter? where if the requested URI is a
-    key in the dict, then the hook is applied based on the filter? value.
-
-    """
-    def filter_flow_step(flow_step):
-        def flow_step_filter(request, *args):
-            do_hook = truthdict.get(request.line.uri, default)
-            if do_hook:
-                return flow_step(*args)
-        flow_step_filter.func_name = flow_step.func_name
-        return flow_step_filter
-    return filter_flow_step
-
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
