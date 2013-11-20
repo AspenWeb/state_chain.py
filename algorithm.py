@@ -187,8 +187,7 @@ class Algorithm(object):
     dictionary for the current run of the algorithm. Functions in the algorithm
     can use any name from the current state dictionary as a parameter, and the
     value will then be supplied dynamically via :py:mod:`dependency_injection`.
-    See the `tutorial`_ for an example, and see the :py:func:`run` method for
-    details on exception handling.
+    See the :py:func:`run` method for details on exception handling.
 
     """
 
@@ -210,7 +209,7 @@ class Algorithm(object):
         An algorithm definition is a regular Python file. All functions defined
         in the file whose name doesn't begin with ``_`` are loaded into a list
         in the order they're defined in the file, and this list is passed to
-        the default class constructor.
+        the default class constructor. See the `tutorial`_ for an example.
 
         """
         module = cls._load_module_from_dotted_name(dotted_name)
