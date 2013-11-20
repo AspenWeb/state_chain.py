@@ -46,12 +46,13 @@ available to downstream functions via :py:mod:`dependency_injection`. Save this
 file on your ``PYTHONPATH`` as ``blah_algorithm.py``. Now here's how to use it:
 
     >>> from algorithm import Algorithm
-    >>> blah = Algorithm('blah_algorithm')
+    >>> blah = Algorithm.from_dotted_name('blah_algorithm')
 
 
-When you instantiate :py:class:`Algorithm` you give it the dotted path to a
-Python module. All of the functions defined in the module are loaded into a
-list, in the order they're defined in the file:
+When you instantiate :py:class:`Algorithm` via the
+:py:meth:`~Algorithm.from_dotted_name` constructor, you give it the dotted name
+of a Python module. All of the functions defined in the module are loaded into
+a list, in the order they're defined in the file:
 
     >>> blah.functions #doctest: +ELLIPSIS
     [<function foo ...>, <function bar ...>, <function bloo ...>]
@@ -64,6 +65,9 @@ a dictionary representing the algorithm's final state:
     >>> state['sum']
     3
 
+
+Modifications and Exceptions
+++++++++++++++++++++++++++++
 
 Let's add two functions to the algorithm, to illustrate both algorithm
 modification and exception handling. First let's define the functions:
@@ -166,7 +170,7 @@ else:
         exec("exec some_python in namespace")
 
 
-class FunctionNotFound(Exception):
+class FunctionNotFound(KeyError):
     """Used when a function is not found in an algorithm function list.
     """
     def __str__(self):
@@ -176,12 +180,7 @@ class FunctionNotFound(Exception):
 class Algorithm(object):
     """Model an algorithm as a list of functions.
 
-    :param dotted_name: the dotted name of a Python module containing the
-        algorithm definition
-
-    An algorithm definition is a regular Python file. All functions defined in
-    the file whose name doesn't begin with ``_`` are loaded into a list at
-    :py:attr:`functions` in the order they're defined in the file.
+    :param functions: a sequence of function in the order they are to be run
 
     Each function in your algorithm must return a mapping or :py:class:`None`.
     If it returns a mapping, the mapping will be used to update a state
@@ -193,34 +192,60 @@ class Algorithm(object):
 
     """
 
-    short_circuit = False #: Whether to re-raise exceptions immediately.
-
-    def __init__(self, dotted_name):
-        self.module = self._load_module_from_dotted_name(dotted_name)
-        self.functions = self._load_functions_from_module(self.module) #: A list of functions.
+    functions = None        #: A list of functions comprising the algorithm.
+    short_circuit = False   #: Whether to re-raise exceptions immediately.
 
 
-    def __iter__(self):
-        return iter(self.functions)
+    def __init__(self, *functions):
+        self.functions = list(functions)
+
+
+    @classmethod
+    def from_dotted_name(cls, dotted_name):
+        """Construct a new instance from an algorithm definition module.
+
+        :param dotted_name: the dotted name of a Python module containing an
+            algorithm definition
+
+        An algorithm definition is a regular Python file. All functions defined
+        in the file whose name doesn't begin with ``_`` are loaded into a list
+        in the order they're defined in the file, and this list is passed to
+        the default class constructor.
+
+        """
+        module = cls._load_module_from_dotted_name(dotted_name)
+        functions = cls._load_functions_from_module(module)
+        return cls(*functions)
+
+
+    def __getitem__(self, name):
+        """Return the function in the :py:attr:`functions` list named ``name``, or raise
+        :py:exc:`FunctionNotFound`.
+
+        >>> def foo(): pass
+        >>> algo = Algorithm(foo)
+        >>> algo['foo'] is foo
+        True
+        >>> algo['bar']
+        Traceback (most recent call last):
+          ...
+        FunctionNotFound: The function 'bar' isn't in this algorithm.
+
+        """
+        func = None
+        for candidate in self.functions:
+            if _get_func_name(candidate) == name:
+                func = candidate
+                break
+        if func is None:
+            raise FunctionNotFound(name)
+        return func
 
 
     def get_names(self):
         """Returns a list of the names of the functions in the :py:attr:`functions` list.
         """
-        return [_get_func_name(f) for f in self]
-
-
-    def get_function(self, name):
-        """Return the function in the :py:attr:`functions` list named ``name``, or raise
-        :py:exc:`FunctionNotFound`.
-        """
-        func = None
-        for func in self.functions:
-            if _get_func_name(func) == name:
-                break
-        if func is None:
-            raise FunctionNotFound(name)
-        return func
+        return [_get_func_name(f) for f in self.functions]
 
 
     def insert_after(self, name, newfunc):
@@ -238,7 +263,7 @@ class Algorithm(object):
 
 
     def insert_relative_to(self, name, newfunc, relative_position):
-        func = self.get_function(name)
+        func = self[name]
         index = self.functions.index(func) + relative_position
         self.functions.insert(index, newfunc)
 
@@ -247,7 +272,7 @@ class Algorithm(object):
         """Remove the function named ``name`` from the :py:attr:`functions` list, or raise
         :py:exc:`FunctionNotFound`.
         """
-        func = self.get_function(name)
+        func = self[name]
         self.functions.remove(func)
 
 
@@ -343,7 +368,8 @@ class Algorithm(object):
     # Helpers for loading from a file.
     # ================================
 
-    def _load_module_from_dotted_name(self, dotted_name):
+    @staticmethod
+    def _load_module_from_dotted_name(dotted_name):
         class RootModule(object): pass
         module = RootModule()  # let's us use getattr to traverse down
         exec_('import {0}'.format(dotted_name), module.__dict__)
@@ -352,7 +378,8 @@ class Algorithm(object):
         return module
 
 
-    def _load_functions_from_module(self, module):
+    @staticmethod
+    def _load_functions_from_module(module):
         """Given a module object, return a list of functions from the module, sorted by lineno.
         """
         functions_with_lineno = []
@@ -367,3 +394,8 @@ class Algorithm(object):
             functions_with_lineno.append((lineno, func))
         functions_with_lineno.sort()
         return [func for lineno, func in functions_with_lineno]
+
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()

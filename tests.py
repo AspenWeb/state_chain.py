@@ -30,15 +30,21 @@ def sys_path(fs, module_scrubber):
     yield fs
     sys.path = sys.path[1:]
 
+FOO_PY = ('foo.py', '''\
+def bar(): return {'val': 1}
+def baz(): return {'val': 2}
+def buz(): return {'val': 3}
+''')
+
 
 # tests
 # =====
 
 def test_Algorithm_can_be_instantiated(sys_path):
     sys_path.mk(('foo/__init__.py', ''), ('foo/bar.py', 'def baz(): pass'))
-    bar_algorithm = Algorithm('foo.bar')
+    bar_algorithm = Algorithm.from_dotted_name('foo.bar')
     from foo.bar import baz
-    assert list(bar_algorithm) == [baz]
+    assert bar_algorithm.functions == [baz]
 
 def test_Algorithm_includes_imported_functions_and_the_order_is_screwy(sys_path):
     sys_path.mk( ('um.py', 'def um(): pass')
@@ -48,9 +54,9 @@ def baz(): pass
 from um import um
 def blah(): pass
 '''))
-    bar_algorithm = Algorithm('foo.bar')
+    bar_algorithm = Algorithm.from_dotted_name('foo.bar')
     import foo.bar, um
-    assert list(bar_algorithm) == [um.um, foo.bar.baz, foo.bar.blah]
+    assert bar_algorithm.functions == [um.um, foo.bar.baz, foo.bar.blah]
 
 def test_Algorithm_ignores_functions_starting_with_underscore(sys_path):
     sys_path.mk( ('um.py', 'def um(): pass')
@@ -60,47 +66,31 @@ def baz(): pass
 from um import um as _um
 def blah(): pass
 '''))
-    bar_algorithm = Algorithm('foo.bar')
+    bar_algorithm = Algorithm.from_dotted_name('foo.bar')
     import foo.bar
-    assert list(bar_algorithm) == [foo.bar.baz, foo.bar.blah]
+    assert bar_algorithm.functions == [foo.bar.baz, foo.bar.blah]
 
 def test_can_run_through_algorithm(sys_path):
-    sys_path.mk(('foo.py', '''
-def bar(): return {'val': 1}
-def baz(): return {'val': 2}
-def buz(): return {'val': 3}
-'''))
-    bar_algorithm = Algorithm('foo')
+    sys_path.mk(FOO_PY)
+    bar_algorithm = Algorithm.from_dotted_name('foo')
     state = bar_algorithm.run(val=None)
     assert state == {'val': 3, 'exc_info': None, 'state': state, 'algorithm': bar_algorithm}
 
 def test_can_run_through_algorithm_to_a_certain_point(sys_path):
-    sys_path.mk(('foo.py', '''
-def bar(): return {'val': 1}
-def baz(): return {'val': 2}
-def buz(): return {'val': 3}
-'''))
-    bar_algorithm = Algorithm('foo')
+    sys_path.mk(FOO_PY)
+    bar_algorithm = Algorithm.from_dotted_name('foo')
     state = bar_algorithm.run(val=None, _through='baz')
     assert state == {'val': 2, 'exc_info': None, 'state': state, 'algorithm': bar_algorithm}
 
 def test_error_raised_if_we_try_to_run_through_an_unknown_function(sys_path):
-    sys_path.mk(('foo.py', '''
-def bar(): return {'val': 1}
-def baz(): return {'val': 2}
-def buz(): return {'val': 3}
-'''))
-    bar_algorithm = Algorithm('foo')
+    sys_path.mk(FOO_PY)
+    bar_algorithm = Algorithm.from_dotted_name('foo')
     raises(FunctionNotFound, bar_algorithm.run, {'val': None}, through='blaaaaaah')
 
 
 def test_inserted_algorithm_steps_run(sys_path):
-    sys_path.mk(('foo.py', '''
-def bar(): return {'val': 1}
-def baz(): return {'val': 2}
-def buz(): return {'val': 3}
-'''))
-    bar_algorithm = Algorithm('foo')
+    sys_path.mk(FOO_PY)
+    bar_algorithm = Algorithm.from_dotted_name('foo')
 
     def biz(): return {'val': 4}
 
