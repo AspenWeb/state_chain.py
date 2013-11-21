@@ -196,6 +196,11 @@ class Algorithm(object):
 
 
     def __init__(self, *functions):
+        if functions:
+            try:
+                _get_func_name(functions[0])
+            except AttributeError:
+                raise TypeError("Not a function: {}".format(repr(functions[0])))
         self.functions = list(functions)
 
 

@@ -40,11 +40,21 @@ def buz(): return {'val': 3}
 # tests
 # =====
 
-def test_Algorithm_can_be_instantiated(sys_path):
+def test_Algorithm_can_be_instantiated():
+    def foo(): pass
+    bar_algorithm = Algorithm(foo)
+    assert bar_algorithm.functions == [foo]
+
+def test_Algorithm_can_be_instantiated_with_from_dotted_name(sys_path):
     sys_path.mk(('foo/__init__.py', ''), ('foo/bar.py', 'def baz(): pass'))
     bar_algorithm = Algorithm.from_dotted_name('foo.bar')
     from foo.bar import baz
     assert bar_algorithm.functions == [baz]
+
+def test_Algorithm_cant_be_instantiated_with_a_string():
+    actual = raises(TypeError, Algorithm, 'foo.bar').value
+    u = 'u' if sys.version_info < (3,) else ''
+    assert str(actual) == "Not a function: {}'foo.bar'".format(u)
 
 def test_Algorithm_includes_imported_functions_and_the_order_is_screwy(sys_path):
     sys_path.mk( ('um.py', 'def um(): pass')
