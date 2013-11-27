@@ -180,7 +180,7 @@ class FunctionNotFound(KeyError):
 class Algorithm(object):
     """Model an algorithm as a list of functions.
 
-    :param functions: a sequence of function in the order they are to be run
+    :param functions: a sequence of functions in the order they are to be run
 
     Each function in your algorithm must return a mapping or :py:class:`None`.
     If it returns a mapping, the mapping will be used to update a state
