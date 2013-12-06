@@ -182,7 +182,7 @@ class Algorithm(object):
     """Model an algorithm as a list of functions.
 
     :param functions: a sequence of functions in the order they are to be run
-    :param bool short_circuit: Whether to re-raise exceptions immediately.
+    :param bool raise_immediately: Whether to re-raise exceptions immediately.
         :py:class:`False` by default, this can only be set as a keyword argument
 
     Each function in your algorithm must return a mapping or :py:class:`None`.
@@ -195,11 +195,11 @@ class Algorithm(object):
     """
 
     functions = None        #: A list of functions comprising the algorithm.
-    default_short_circuit = False
+    default_raise_immediately = False
 
 
     def __init__(self, *functions, **kw):
-        self.default_short_circuit = kw.pop('short_circuit', False)
+        self.default_raise_immediately = kw.pop('raise_immediately', False)
         if functions:
             try:
                 _get_func_name(functions[0])
@@ -286,20 +286,20 @@ class Algorithm(object):
         self.functions.remove(func)
 
 
-    def run(self, _short_circuit=None, _through=None, **state):
+    def run(self, _raise_immediately=None, _stop_after=None, **state):
         """Run through the functions in the :py:attr:`functions` list.
 
-        :param _short_circuit: if not ``None``, will override any default for
-            ``short_circuit`` that was set in the constructor
+        :param bool _raise_immediately: if not ``None``, will override any
+            default for ``raise_immediately`` that was set in the constructor
 
-        :param _through: if not ``None``, return after calling the function
+        :param str _stop_after: if not ``None``, return after calling the function
             with this name
 
-        :param state: remaining keyword arguments are used for the initial
+        :param dict state: remaining keyword arguments are used for the initial
             state dictionary for this run of the algorithm
 
         :raises: :py:exc:`FunctionNotFound`, if there is no function named
-            ``_through``
+            ``_stop_after``
 
         :returns: a dictionary representing the final algorithm state
 
@@ -320,8 +320,9 @@ class Algorithm(object):
 
         Here are some further notes on exception handling:
 
-         - If your function provides a default value for ``exc_info``, then it
-           will be called whether or not there is an exception being handled.
+         - If a function provides a default value for ``exc_info``, then that
+           function will be called whether or not there is an exception being
+           handled.
 
          - You should return ``{'exc_info': None}`` to reset exception
            handling. We call :py:func:`sys.exc_clear` for you in this case.
@@ -335,17 +336,19 @@ class Algorithm(object):
          - If ``exc_info`` is not ``None`` after all functions have been run,
            then we re-raise the current exception.
 
-         - If you set ``short_circuit`` evaluates to ``True``, then we re-raise
-           any exception immediately instead of fast-forwarding to the next
-           exception handler.
+         - If ``raise_immediately`` evaluates to ``True`` (looking first at any
+           per-call ``_raise_immediately`` and then at the instance default),
+           then we re-raise any exception immediately instead of
+           fast-forwarding to the next exception handler.
 
         """
 
-        short_circuit = self.default_short_circuit if _short_circuit is None else _short_circuit
+        if _raise_immediately is None:
+            _raise_immediately = self.default_raise_immediately
 
-        if _through is not None:
-            if _through not in self.get_names():
-                raise FunctionNotFound(_through)
+        if _stop_after is not None:
+            if _stop_after not in self.get_names():
+                raise FunctionNotFound(_stop_after)
 
         if 'algorithm' not in state:    state['algorithm'] = self
         if 'state' not in state:        state['state'] = state
@@ -369,10 +372,10 @@ class Algorithm(object):
                         state.update(new_state)
             except:
                 state['exc_info'] = sys.exc_info()[:2] + (traceback.format_exc().strip(),)
-                if short_circuit:
+                if _raise_immediately:
                     raise
 
-            if _through is not None and function_name == _through:
+            if _stop_after is not None and function_name == _stop_after:
                 break
 
         if state['exc_info'] is not None:

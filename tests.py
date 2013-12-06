@@ -86,16 +86,16 @@ def test_can_run_through_algorithm(sys_path):
     state = foo_algorithm.run(val=None)
     assert state == {'val': 3, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
 
-def test_can_run_through_algorithm_to_a_certain_point(sys_path):
+def test_can_stop_algorithm_after_a_certain_point(sys_path):
     sys_path.mk(FOO_PY)
     foo_algorithm = Algorithm.from_dotted_name('foo')
-    state = foo_algorithm.run(val=None, _through='baz')
+    state = foo_algorithm.run(val=None, _stop_after='baz')
     assert state == {'val': 2, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
 
-def test_error_raised_if_we_try_to_run_through_an_unknown_function(sys_path):
+def test_error_raised_if_we_try_to_stop_after_an_unknown_function(sys_path):
     sys_path.mk(FOO_PY)
     foo_algorithm = Algorithm.from_dotted_name('foo')
-    raises(FunctionNotFound, foo_algorithm.run, val=None, _through='blaaaaaah')
+    raises(FunctionNotFound, foo_algorithm.run, val=None, _stop_after='blaaaaaah')
 
 def test_inserted_algorithm_steps_run(sys_path):
     sys_path.mk(FOO_PY)
@@ -137,20 +137,20 @@ def test_exception_raises_if_uncleared(sys_path):
     foo_algorithm.remove('clear')
     raises(NameError, foo_algorithm.run)
 
-def test_exception_raises_if_short_circuited_via_constructor(sys_path):
+def test_exception_raises_immediately_if_told_to_via_constructor(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo', short_circuit=True)
+    foo_algorithm = Algorithm.from_dotted_name('foo', raise_immediately=True)
     foo_algorithm.remove('clear')
     raises(NameError, foo_algorithm.run)
 
-def test_exception_raises_if_short_circuited_via_run_call(sys_path):
+def test_exception_raises_immediately_if_told_to_via_run_call(sys_path):
     sys_path.mk(EXCEPT)
     foo_algorithm = Algorithm.from_dotted_name('foo')
     foo_algorithm.remove('clear')
-    raises(NameError, foo_algorithm.run, _short_circuit=True)
+    raises(NameError, foo_algorithm.run, _raise_immediately=True)
 
-def test_short_circuit_in_run_call_trumps_short_circuit_to_constructor(sys_path):
+def test_per_call_trumps_constructor_for_raise_immediately(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo', short_circuit=True)
+    foo_algorithm = Algorithm.from_dotted_name('foo', raise_immediately=True)
     foo_algorithm.remove('clear')
-    raises(NameError, foo_algorithm.run, _short_circuit=False)
+    raises(NameError, foo_algorithm.run, _raise_immediately=False)
