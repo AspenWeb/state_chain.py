@@ -107,3 +107,32 @@ def test_inserted_algorithm_steps_run(sys_path):
     state = foo_algorithm.run(val=None)
 
     assert state == {'val': 4, 'exc_info': None, 'state': state, 'algorithm':foo_algorithm}
+
+
+# Exception Handling
+# ==================
+
+EXCEPT = ('foo.py', '''
+
+    def bar():
+        raise heck
+
+    def baz():
+        return {'val': 42}
+
+    def clear(exc_info):
+        return {'val': 666, 'exc_info': None}
+
+''')
+
+def test_exception_fast_forwards(sys_path):
+    sys_path.mk(EXCEPT)
+    foo_algorithm = Algorithm.from_dotted_name('foo')
+    state = foo_algorithm.run()
+    assert state == {'val': 666, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
+
+def test_exception_raises_if_uncleared(sys_path):
+    sys_path.mk(EXCEPT)
+    foo_algorithm = Algorithm.from_dotted_name('foo')
+    foo_algorithm.remove('clear')
+    raises(NameError, foo_algorithm.run)
