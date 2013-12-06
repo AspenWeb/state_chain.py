@@ -42,14 +42,14 @@ def buz(): return {'val': 3}
 
 def test_Algorithm_can_be_instantiated():
     def foo(): pass
-    bar_algorithm = Algorithm(foo)
-    assert bar_algorithm.functions == [foo]
+    foo_algorithm = Algorithm(foo)
+    assert foo_algorithm.functions == [foo]
 
 def test_Algorithm_can_be_instantiated_with_from_dotted_name(sys_path):
     sys_path.mk(('foo/__init__.py', ''), ('foo/bar.py', 'def baz(): pass'))
-    bar_algorithm = Algorithm.from_dotted_name('foo.bar')
+    foo_algorithm = Algorithm.from_dotted_name('foo.bar')
     from foo.bar import baz
-    assert bar_algorithm.functions == [baz]
+    assert foo_algorithm.functions == [baz]
 
 def test_Algorithm_cant_be_instantiated_with_a_string():
     actual = raises(TypeError, Algorithm, 'foo.bar').value
@@ -64,9 +64,9 @@ def baz(): pass
 from um import um
 def blah(): pass
 '''))
-    bar_algorithm = Algorithm.from_dotted_name('foo.bar')
+    foo_algorithm = Algorithm.from_dotted_name('foo.bar')
     import foo.bar, um
-    assert bar_algorithm.functions == [um.um, foo.bar.baz, foo.bar.blah]
+    assert foo_algorithm.functions == [um.um, foo.bar.baz, foo.bar.blah]
 
 def test_Algorithm_ignores_functions_starting_with_underscore(sys_path):
     sys_path.mk( ('um.py', 'def um(): pass')
@@ -76,35 +76,34 @@ def baz(): pass
 from um import um as _um
 def blah(): pass
 '''))
-    bar_algorithm = Algorithm.from_dotted_name('foo.bar')
+    foo_algorithm = Algorithm.from_dotted_name('foo.bar')
     import foo.bar
-    assert bar_algorithm.functions == [foo.bar.baz, foo.bar.blah]
+    assert foo_algorithm.functions == [foo.bar.baz, foo.bar.blah]
 
 def test_can_run_through_algorithm(sys_path):
     sys_path.mk(FOO_PY)
-    bar_algorithm = Algorithm.from_dotted_name('foo')
-    state = bar_algorithm.run(val=None)
-    assert state == {'val': 3, 'exc_info': None, 'state': state, 'algorithm': bar_algorithm}
+    foo_algorithm = Algorithm.from_dotted_name('foo')
+    state = foo_algorithm.run(val=None)
+    assert state == {'val': 3, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
 
 def test_can_run_through_algorithm_to_a_certain_point(sys_path):
     sys_path.mk(FOO_PY)
-    bar_algorithm = Algorithm.from_dotted_name('foo')
-    state = bar_algorithm.run(val=None, _through='baz')
-    assert state == {'val': 2, 'exc_info': None, 'state': state, 'algorithm': bar_algorithm}
+    foo_algorithm = Algorithm.from_dotted_name('foo')
+    state = foo_algorithm.run(val=None, _through='baz')
+    assert state == {'val': 2, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
 
 def test_error_raised_if_we_try_to_run_through_an_unknown_function(sys_path):
     sys_path.mk(FOO_PY)
-    bar_algorithm = Algorithm.from_dotted_name('foo')
-    raises(FunctionNotFound, bar_algorithm.run, val=None, _through='blaaaaaah')
-
+    foo_algorithm = Algorithm.from_dotted_name('foo')
+    raises(FunctionNotFound, foo_algorithm.run, val=None, _through='blaaaaaah')
 
 def test_inserted_algorithm_steps_run(sys_path):
     sys_path.mk(FOO_PY)
-    bar_algorithm = Algorithm.from_dotted_name('foo')
+    foo_algorithm = Algorithm.from_dotted_name('foo')
 
     def biz(): return {'val': 4}
 
-    bar_algorithm.insert_after('buz', biz)
-    state = bar_algorithm.run(val=None)
+    foo_algorithm.insert_after('buz', biz)
+    state = foo_algorithm.run(val=None)
 
-    assert state == {'val': 4, 'exc_info': None, 'state': state, 'algorithm':bar_algorithm}
+    assert state == {'val': 4, 'exc_info': None, 'state': state, 'algorithm':foo_algorithm}
