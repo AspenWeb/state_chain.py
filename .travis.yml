@@ -5,7 +5,9 @@ python:
   - 3.2
   - 3.3
 install:
-  - pip install --use-mirrors --upgrade pytest>=2.4 filesystem_tree ./
+  - pip install --use-mirrors --upgrade pytest>=2.4
+  - pip install --use-mirrors --upgrade filesystem_tree
+  - pip install ./
 script: 
   - ./runtests.sh
 notifications:
