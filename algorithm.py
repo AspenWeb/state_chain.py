@@ -171,7 +171,8 @@ else:
 
 
 class FunctionNotFound(KeyError):
-    """Used when a function is not found in an algorithm function list.
+    """Used when a function is not found in an algorithm function list (subclasses
+    :py:exc:`KeyError`).
     """
     def __str__(self):
         return "The function '{0}' isn't in this algorithm.".format(*self.args)
