@@ -95,7 +95,7 @@ def test_can_run_through_algorithm_to_a_certain_point(sys_path):
 def test_error_raised_if_we_try_to_run_through_an_unknown_function(sys_path):
     sys_path.mk(FOO_PY)
     bar_algorithm = Algorithm.from_dotted_name('foo')
-    raises(FunctionNotFound, bar_algorithm.run, {'val': None}, through='blaaaaaah')
+    raises(FunctionNotFound, bar_algorithm.run, val=None, _through='blaaaaaah')
 
 
 def test_inserted_algorithm_steps_run(sys_path):
