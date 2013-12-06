@@ -136,3 +136,21 @@ def test_exception_raises_if_uncleared(sys_path):
     foo_algorithm = Algorithm.from_dotted_name('foo')
     foo_algorithm.remove('clear')
     raises(NameError, foo_algorithm.run)
+
+def test_exception_raises_if_short_circuited_via_constructor(sys_path):
+    sys_path.mk(EXCEPT)
+    foo_algorithm = Algorithm.from_dotted_name('foo', short_circuit=True)
+    foo_algorithm.remove('clear')
+    raises(NameError, foo_algorithm.run)
+
+def test_exception_raises_if_short_circuited_via_run_call(sys_path):
+    sys_path.mk(EXCEPT)
+    foo_algorithm = Algorithm.from_dotted_name('foo')
+    foo_algorithm.remove('clear')
+    raises(NameError, foo_algorithm.run, _short_circuit=True)
+
+def test_short_circuit_in_run_call_trumps_short_circuit_to_constructor(sys_path):
+    sys_path.mk(EXCEPT)
+    foo_algorithm = Algorithm.from_dotted_name('foo', short_circuit=True)
+    foo_algorithm.remove('clear')
+    raises(NameError, foo_algorithm.run, _short_circuit=False)

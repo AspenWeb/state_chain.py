@@ -182,6 +182,8 @@ class Algorithm(object):
     """Model an algorithm as a list of functions.
 
     :param functions: a sequence of functions in the order they are to be run
+    :param bool short_circuit: Whether to re-raise exceptions immediately.
+        :py:class:`False` by default, this can only be set as a keyword argument
 
     Each function in your algorithm must return a mapping or :py:class:`None`.
     If it returns a mapping, the mapping will be used to update a state
@@ -193,10 +195,11 @@ class Algorithm(object):
     """
 
     functions = None        #: A list of functions comprising the algorithm.
-    short_circuit = False   #: Whether to re-raise exceptions immediately.
+    default_short_circuit = False
 
 
-    def __init__(self, *functions):
+    def __init__(self, *functions, **kw):
+        self.default_short_circuit = kw.pop('short_circuit', False)
         if functions:
             try:
                 _get_func_name(functions[0])
@@ -206,11 +209,13 @@ class Algorithm(object):
 
 
     @classmethod
-    def from_dotted_name(cls, dotted_name):
+    def from_dotted_name(cls, dotted_name, **kw):
         """Construct a new instance from an algorithm definition module.
 
         :param dotted_name: the dotted name of a Python module containing an
             algorithm definition
+
+        :param kw: keyword arguments are passed through to the default constructor
 
         An algorithm definition is a regular Python file. All functions defined
         in the file whose name doesn't begin with ``_`` are loaded into a list
@@ -220,7 +225,7 @@ class Algorithm(object):
         """
         module = cls._load_module_from_dotted_name(dotted_name)
         functions = cls._load_functions_from_module(module)
-        return cls(*functions)
+        return cls(*functions, **kw)
 
 
     def __getitem__(self, name):
@@ -281,8 +286,11 @@ class Algorithm(object):
         self.functions.remove(func)
 
 
-    def run(self, _through=None, **state):
+    def run(self, _short_circuit=None, _through=None, **state):
         """Run through the functions in the :py:attr:`functions` list.
+
+        :param _short_circuit: if not ``None``, will override any default for
+            ``short_circuit`` that was set in the constructor
 
         :param _through: if not ``None``, return after calling the function
             with this name
@@ -327,11 +335,14 @@ class Algorithm(object):
          - If ``exc_info`` is not ``None`` after all functions have been run,
            then we re-raise the current exception.
 
-         - If you set :attr:`short_circuit` to ``True``, then we re-raise any
-           exception immediately instead of fast-forwarding to the next
+         - If you set ``short_circuit`` evaluates to ``True``, then we re-raise
+           any exception immediately instead of fast-forwarding to the next
            exception handler.
 
         """
+
+        short_circuit = self.default_short_circuit if _short_circuit is None else _short_circuit
+
         if _through is not None:
             if _through not in self.get_names():
                 raise FunctionNotFound(_through)
@@ -358,7 +369,7 @@ class Algorithm(object):
                         state.update(new_state)
             except:
                 state['exc_info'] = sys.exc_info()[:2] + (traceback.format_exc().strip(),)
-                if self.short_circuit:
+                if short_circuit:
                     raise
 
             if _through is not None and function_name == _through:
