@@ -89,13 +89,13 @@ def test_can_run_through_algorithm(sys_path):
 def test_can_stop_algorithm_after_a_certain_point(sys_path):
     sys_path.mk(FOO_PY)
     foo_algorithm = Algorithm.from_dotted_name('foo')
-    state = foo_algorithm.run(val=None, _stop_after='baz')
+    state = foo_algorithm.run(val=None, _return_after='baz')
     assert state == {'val': 2, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
 
-def test_error_raised_if_we_try_to_stop_after_an_unknown_function(sys_path):
+def test_error_raised_if_we_try_to_return_after_an_unknown_function(sys_path):
     sys_path.mk(FOO_PY)
     foo_algorithm = Algorithm.from_dotted_name('foo')
-    raises(FunctionNotFound, foo_algorithm.run, val=None, _stop_after='blaaaaaah')
+    raises(FunctionNotFound, foo_algorithm.run, val=None, _return_after='blaaaaaah')
 
 def test_inserted_algorithm_steps_run(sys_path):
     sys_path.mk(FOO_PY)

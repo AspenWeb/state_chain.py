@@ -286,20 +286,20 @@ class Algorithm(object):
         self.functions.remove(func)
 
 
-    def run(self, _raise_immediately=None, _stop_after=None, **state):
+    def run(self, _raise_immediately=None, _return_after=None, **state):
         """Run through the functions in the :py:attr:`functions` list.
 
         :param bool _raise_immediately: if not ``None``, will override any
             default for ``raise_immediately`` that was set in the constructor
 
-        :param str _stop_after: if not ``None``, return after calling the function
+        :param str _return_after: if not ``None``, return after calling the function
             with this name
 
         :param dict state: remaining keyword arguments are used for the initial
             state dictionary for this run of the algorithm
 
         :raises: :py:exc:`FunctionNotFound`, if there is no function named
-            ``_stop_after``
+            ``_return_after``
 
         :returns: a dictionary representing the final algorithm state
 
@@ -346,9 +346,9 @@ class Algorithm(object):
         if _raise_immediately is None:
             _raise_immediately = self.default_raise_immediately
 
-        if _stop_after is not None:
-            if _stop_after not in self.get_names():
-                raise FunctionNotFound(_stop_after)
+        if _return_after is not None:
+            if _return_after not in self.get_names():
+                raise FunctionNotFound(_return_after)
 
         if 'algorithm' not in state:    state['algorithm'] = self
         if 'state' not in state:        state['state'] = state
@@ -375,7 +375,7 @@ class Algorithm(object):
                 if _raise_immediately:
                     raise
 
-            if _stop_after is not None and function_name == _stop_after:
+            if _return_after is not None and function_name == _return_after:
                 break
 
         if state['exc_info'] is not None:
