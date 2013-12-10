@@ -137,6 +137,7 @@ API Reference
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import opcode
 import sys
 import types
 import traceback
@@ -206,6 +207,7 @@ class Algorithm(object):
             except AttributeError:
                 raise TypeError("Not a function: {}".format(repr(functions[0])))
         self.functions = list(functions)
+        self.debug = DebugMethod(self)
 
 
     @classmethod
@@ -413,6 +415,160 @@ class Algorithm(object):
             functions_with_lineno.append((lineno, func))
         functions_with_lineno.sort()
         return [func for lineno, func in functions_with_lineno]
+
+
+# Debugging Helpers
+# =================
+
+class DebugMethod(object):
+    """This provides a callable that also provides mapping access.
+    """
+
+    def __init__(self, algorithm):
+        self.algorithm = algorithm
+
+    def __call__(self, function):
+        """Given a function, set it up for debugging.
+        """
+        debugging_function = debug(function)
+        for i, candidate in enumerate(self.algorithm.functions):
+            if candidate is function:
+                self.algorithm.functions[i] = debugging_function
+        return debugging_function
+
+    def debug_by_name(self, name):
+        return self(self.algorithm[name])
+
+    __getitem__ = debug_by_name
+
+
+def debug(function):
+    """Given a function, set a breakpoint immediately inside it.
+
+    Okay! This is so fun. :-)
+
+    The idea here is that you want to be able to debug an algorithm function,
+    but it's inconvenient to get to the source in order to set a breakpoint. So
+    what we do here is construct a new function object with modified bytecode
+    (and attendent data structures). So this is basically a decorator, but it
+    would be useless in situations where you could decorate a function (because
+    then you have the source code in front of you and you could just insert the
+    breakpoint yourself).
+
+    >>> def foo(bar, baz):
+    ...     print "Greetings, program!"
+    ...
+    >>> func = debug(foo)
+    >>> func()
+    blah
+
+    This function is available as a static method on the Algorithm class,
+    and also as a standalone function in the algorithm module. So you can
+    `from algorithm import debug` and use it that way, or since you
+    probably have an algorithm instance wherever you want to use this
+    function, you can also use it like so:
+
+    >>> blah = Algorithm.from_dotted_name('blah_algorithm')
+    >>> blah.debug_by_name('blah_algorithm')
+
+    """
+
+    # Build bytecode for a set_trace call.
+    # ====================================
+
+    NOARG = object()
+
+    codes = ( (b'LOAD_CONST', 0)
+            , (b'LOAD_CONST', None)
+            , (b'IMPORT_NAME', b'pdb')
+            , (b'STORE_GLOBAL', b'pdb')
+            , (b'LOAD_GLOBAL', b'pdb')
+            , (b'LOAD_ATTR', b'set_trace')
+            , (b'CALL_FUNCTION', 0)
+            , (b'POP_TOP', NOARG)
+             )
+
+    new_names = function.__code__.co_names
+    new_consts = function.__code__.co_consts
+    new_code = b''
+    addr_pad = 0
+
+    for name, arg in codes:
+
+        # This is the inverse of the subset of dis.disassemble needed to handle
+        # our use case.
+
+        addr_pad += 1
+        op = opcode.opmap[name]
+        new_code += chr(op)
+        if op >= opcode.HAVE_ARGUMENT:
+            addr_pad += 2
+            if op in opcode.hasconst:
+                if arg not in new_consts:
+                    new_consts += (arg,)
+                val = new_consts.index(arg)
+            elif op in opcode.hasname:
+                if arg not in new_names:
+                    new_names += (arg,)
+                val = new_names.index(arg)
+            elif name == 'CALL_FUNCTION':
+                val = arg  # number of args
+            new_code += chr(val) + chr(0)
+
+
+    # Finish inserting our new bytecode in front of the old.
+    # ======================================================
+    # Loop over old_code and append it to new_code, fixing up absolute jump
+    # references along the way. Then fix up the line number table.
+
+    old_code = function.__code__.co_code
+    i = 0
+    n = len(old_code)
+    while i < n:
+        c = old_code[i]
+        op = ord(c)
+        i += 1
+        new_code += c
+        if op >= opcode.HAVE_ARGUMENT:
+            oparg = ord(old_code[i]) + ord(old_code[i+1])*256
+            if op in opcode.hasjabs:
+                oparg += addr_pad
+            i += 2
+            new_code += chr(oparg) + chr(0)
+
+    old_lnotab = function.__code__.co_lnotab
+    new_lnotab = (old_lnotab[:2] + chr(ord(old_lnotab[2]) + addr_pad) + old_lnotab[3:])
+
+
+    # Now construct new code and function objects.
+    # ============================================
+
+    new_code = type(function.__code__)( function.__code__.co_argcount
+                                      , function.__code__.co_nlocals
+                                      , function.__code__.co_stacksize
+                                      , function.__code__.co_flags
+
+                                      , new_code
+                                      , new_consts
+                                      , new_names
+                                      , function.__code__.co_varnames
+
+                                      , function.__code__.co_filename
+                                      , function.__code__.co_name
+                                      , function.__code__.co_firstlineno
+                                      , new_lnotab
+
+                                      , function.__code__.co_freevars
+                                      , function.__code__.co_cellvars
+                                       )
+
+    new_function = type(function)( new_code
+                                 , function.func_globals
+                                 , function.func_name
+                                 , function.func_closure
+                                  )
+
+    return new_function
 
 
 if __name__ == '__main__':
