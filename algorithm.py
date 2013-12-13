@@ -207,7 +207,7 @@ class Algorithm(object):
             except AttributeError:
                 raise TypeError("Not a function: {}".format(repr(functions[0])))
         self.functions = list(functions)
-        self.debug = DebugMethod(self)
+        self.debug = _DebugMethod(self)
 
 
     @classmethod
@@ -228,64 +228,6 @@ class Algorithm(object):
         module = cls._load_module_from_dotted_name(dotted_name)
         functions = cls._load_functions_from_module(module)
         return cls(*functions, **kw)
-
-
-    def __getitem__(self, name):
-        """Return the function in the :py:attr:`functions` list named ``name``, or raise
-        :py:exc:`FunctionNotFound`.
-
-        >>> def foo(): pass
-        >>> algo = Algorithm(foo)
-        >>> algo['foo'] is foo
-        True
-        >>> algo['bar']
-        Traceback (most recent call last):
-          ...
-        FunctionNotFound: The function 'bar' isn't in this algorithm.
-
-        """
-        func = None
-        for candidate in self.functions:
-            if _get_func_name(candidate) == name:
-                func = candidate
-                break
-        if func is None:
-            raise FunctionNotFound(name)
-        return func
-
-
-    def get_names(self):
-        """Returns a list of the names of the functions in the :py:attr:`functions` list.
-        """
-        return [_get_func_name(f) for f in self.functions]
-
-
-    def insert_after(self, name, newfunc):
-        """Insert ``newfunc`` in the :py:attr:`functions` list after the function named
-        ``name``, or raise :py:exc:`FunctionNotFound`.
-        """
-        self.insert_relative_to(name, newfunc, relative_position=1)
-
-
-    def insert_before(self, name, newfunc):
-        """Insert ``newfunc`` in the :py:attr:`functions` list before the function named
-        ``name``, or raise :py:exc:`FunctionNotFound`.
-        """
-        self.insert_relative_to(name, newfunc, relative_position=0)
-
-
-    def insert_relative_to(self, name, newfunc, relative_position):
-        func = self[name]
-        index = self.functions.index(func) + relative_position
-        self.functions.insert(index, newfunc)
-
-
-    def remove(self, name):
-        """Remove the function named ``name`` from the :py:attr:`functions` list, or raise
-        :py:exc:`FunctionNotFound`.
-        """
-        func = self[name]
-        self.functions.remove(func)
 
 
     def run(self, _raise_immediately=None, _return_after=None, **state):
@@ -386,6 +328,96 @@ class Algorithm(object):
         return state
 
 
+    def __getitem__(self, name):
+        """Return the function in the :py:attr:`functions` list named ``name``, or raise
+        :py:exc:`FunctionNotFound`.
+
+        >>> def foo(): pass
+        >>> algo = Algorithm(foo)
+        >>> algo['foo'] is foo
+        True
+        >>> algo['bar']
+        Traceback (most recent call last):
+          ...
+        FunctionNotFound: The function 'bar' isn't in this algorithm.
+
+        """
+        func = None
+        for candidate in self.functions:
+            if _get_func_name(candidate) == name:
+                func = candidate
+                break
+        if func is None:
+            raise FunctionNotFound(name)
+        return func
+
+
+    def get_names(self):
+        """Returns a list of the names of the functions in the :py:attr:`functions` list.
+        """
+        return [_get_func_name(f) for f in self.functions]
+
+
+    def insert_after(self, name, newfunc):
+        """Insert ``newfunc`` in the :py:attr:`functions` list after the function named
+        ``name``, or raise :py:exc:`FunctionNotFound`.
+        """
+        self.insert_relative_to(name, newfunc, relative_position=1)
+
+
+    def insert_before(self, name, newfunc):
+        """Insert ``newfunc`` in the :py:attr:`functions` list before the function named
+        ``name``, or raise :py:exc:`FunctionNotFound`.
+        """
+        self.insert_relative_to(name, newfunc, relative_position=0)
+
+
+    def insert_relative_to(self, name, newfunc, relative_position):
+        func = self[name]
+        index = self.functions.index(func) + relative_position
+        self.functions.insert(index, newfunc)
+
+
+    def remove(self, name):
+        """Remove the function named ``name`` from the :py:attr:`functions` list, or raise
+        :py:exc:`FunctionNotFound`.
+        """
+        func = self[name]
+        self.functions.remove(func)
+
+
+    def debug(self, function):
+        """Given a function, return the same function with a breakpoint at the top.
+
+        :param function function: a function object
+
+        This method is basically a decorator that inserts a debugging
+        breakpoint at the very beginning of ``function``. It's useful when you
+        want to debug an an algorithm that you've composed using functions that
+        you don't have ready source access to (otherwise you could insert the
+        breakpoint yourself).
+
+        Here's the sort of
+
+        As a convenience, this debug method itself can be accessed using
+        dictionary-style key access with the name of a function. This makes it
+        especially easy to debug a function that you were already accessing
+        using key access on the algorithm itself. So for example, if you want
+        to debug the ``foo`` function:
+
+        >>> blah_algorithm.functions = [ blah_algorithm['foo'] ]
+
+        You can just insert ``.debug``:
+
+        >>> blah_algorithm.functions = [ blah_algorithm.debug['foo'] ]
+
+        Now when you
+
+
+        """
+        raise NotImplementedError  # Should be overriden by _DebugMethod in constructor.
+
+
     # Helpers for loading from a file.
     # ================================
 
@@ -420,26 +452,21 @@ class Algorithm(object):
 # Debugging Helpers
 # =================
 
-class DebugMethod(object):
-    """This provides a callable that also provides mapping access.
-    """
+class _DebugMethod(object):
+    # See docstring at Algorithm.debug.
 
     def __init__(self, algorithm):
         self.algorithm = algorithm
 
     def __call__(self, function):
-        """Given a function, set it up for debugging.
-        """
         debugging_function = debug(function)
         for i, candidate in enumerate(self.algorithm.functions):
             if candidate is function:
                 self.algorithm.functions[i] = debugging_function
         return debugging_function
 
-    def debug_by_name(self, name):
+    def __getitem__(self, name):
         return self(self.algorithm[name])
-
-    __getitem__ = debug_by_name
 
 
 def debug(function):
