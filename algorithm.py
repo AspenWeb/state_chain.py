@@ -11,12 +11,11 @@ Installation
 We `test <https://travis-ci.org/gittip/algorithm.py>`_ against
 Python 2.6, 2.7, 3.2, and 3.3.
 
-:py:mod:`algorithm` is in the `public domain`_.
+:py:mod:`algorithm` is MIT-licensed.
 
 
 .. _GitHub: https://github.com/gittip/algorithm.py
 .. _PyPI: https://pypi.python.org/pypi/algorithm
-.. _public domain: http://creativecommons.org/publicdomain/zero/1.0/
 
 
 Tutorial
