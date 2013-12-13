@@ -555,10 +555,13 @@ def debug(function):
     But it would be useless in situations where you could actually decorate a
     function using the normal decorator syntax, because then you have the
     source code in front of you and you could just insert the breakpoint
-    yourself. Instead, it's useful when you've got a function object from
-    somewhere else and you want to debug it. See the method
-    :py:meth:`Algorithm.debug` for an explanation of where this can be
-    interesting.
+    yourself. It's also pretty useless when you have a function object that
+    you're about to call, because you can simply add a ``set_trace`` before the
+    function call and then step into the function. No: this helper is only
+    useful when you've got a function object that you want to debug, and you
+    have neither the definition nor the call conveniently at hand. See the
+    method :py:meth:`Algorithm.debug` for an explanation of how this situation
+    arises with the :py:mod:`algorithm` module.
 
     For our purposes here, it's enough to know that you can wrap any function:
 
@@ -572,9 +575,9 @@ def debug(function):
     >>> func(1, 2)                  #doctest: +SKIP
     (Pdb)
 
-    The fun part is how this is implemented: we make a copy of the function
-    object you pass in, with the bytecode dynamically modified to insert the
-    code ``import pdb; pdb.set_trace()``. Neat, huh? :-)
+    The fun part is how this is implemented: we dynamically modify the
+    function's bytecode to insert the statements ``import pdb;
+    pdb.set_trace()``.  Neat, huh? :-)
 
     """
 
