@@ -202,7 +202,7 @@ class Algorithm(object):
             try:
                 _get_func_name(functions[0])
             except AttributeError:
-                raise TypeError("Not a function: {}".format(repr(functions[0])))
+                raise TypeError("Not a function: {0}".format(repr(functions[0])))
         self.functions = list(functions)
         self.debug = _DebugMethod(self)
 
