@@ -54,7 +54,7 @@ def test_Algorithm_can_be_instantiated_with_from_dotted_name(sys_path):
 def test_Algorithm_cant_be_instantiated_with_a_string():
     actual = raises(TypeError, Algorithm, 'foo.bar').value
     u = 'u' if sys.version_info < (3,) else ''
-    assert str(actual) == "Not a function: {}'foo.bar'".format(u)
+    assert str(actual) == "Not a function: {0}'foo.bar'".format(u)
 
 def test_Algorithm_includes_imported_functions_and_the_order_is_screwy(sys_path):
     sys_path.mk( ('um.py', 'def um(): pass')
