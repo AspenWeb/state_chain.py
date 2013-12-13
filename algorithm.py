@@ -26,34 +26,31 @@ list of functions that operate on a shared state dictionary. Algorithms defined
 this way are easy to arbitrarily modify at run time, and they provide cascading
 exception handling.
 
-To get started, define an algorithm by defining a series of functions in a
-Python file::
+To get started, define some functions:
 
-    def foo():
-        return {'baz': 1}
-
-    def bar():
-        return {'buz': 2}
-
-    def bloo(baz, buz):
-        return {'sum': baz + buz)
+    >>> def foo():
+    ...     return {'baz': 1}
+    ...
+    >>> def bar():
+    ...     return {'buz': 2}
+    ...
+    >>> def bloo(baz, buz):
+    ...     return {'sum': baz + buz}
+    ...
 
 
 Each function returns a :py:class:`dict`, which is used to update the state of
 the current run of the algorithm. Names from the state dictionary are made
-available to downstream functions via :py:mod:`dependency_injection`. Save this
-file on your ``PYTHONPATH`` as ``blah_algorithm.py``. Now here's how to use it:
+available to downstream functions via :py:mod:`dependency_injection`. Now
+make an :py:class:`Algorithm` object:
 
     >>> from algorithm import Algorithm
-    >>> blah = Algorithm.from_dotted_name('blah_algorithm')
+    >>> blah = Algorithm(foo, bar, bloo)
 
 
-When you instantiate :py:class:`Algorithm` via the
-:py:meth:`~Algorithm.from_dotted_name` constructor, you give it the dotted name
-of a Python module. All of the functions defined in the module are loaded into
-a list, in the order they're defined in the file:
+The functions you passed to the constructor are loaded into a list:
 
-    >>> blah.functions #doctest: +ELLIPSIS
+    >>> blah.functions          #doctest: +ELLIPSIS
     [<function foo ...>, <function bar ...>, <function bloo ...>]
 
 
@@ -63,6 +60,8 @@ a dictionary representing the algorithm's final state:
     >>> state = blah.run()
     >>> state['sum']
     3
+
+Okay!
 
 
 Modifications and Exceptions
@@ -76,7 +75,7 @@ modification and exception handling. First let's define the functions:
     ...         raise heck
     ...
     >>> def deal_with_it(exc_info):
-    ...     print(exc_info[1])
+    ...     print("I am dealing with it!")
     ...     return {'exc_info': None}
     ...
 
@@ -85,21 +84,21 @@ Now let's interpolate them into our algorithm. Let's put the ``uh_oh`` function 
 ``bar`` and ``bloo``:
 
     >>> blah.insert_before('bloo', uh_oh)
-    >>> blah.functions #doctest: +ELLIPSIS
+    >>> blah.functions      #doctest: +ELLIPSIS
     [<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>]
 
 
 Then let's add our exception handler at the end:
 
-    >>> blah.insert_after('bloo', deal_with_it)
-    >>> blah.functions #doctest: +ELLIPSIS
+    >>> blah.functions.append(deal_with_it)
+    >>> blah.functions      #doctest: +ELLIPSIS
     [<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
 
 
 Just for kicks, let's remove the ``foo`` function while we're at it:
 
     >>> blah.remove('foo')
-    >>> blah.functions #doctest: +ELLIPSIS
+    >>> blah.functions      #doctest: +ELLIPSIS
     [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
 
 
@@ -108,10 +107,9 @@ providing a value for ``bar``, we'll need to supply that using a keyword
 argument to :py:func:`~Algorithm.run`:
 
     >>> state = blah.run(baz=2)
-    global name 'heck' is not defined
+    I am dealing with it!
 
 
-The ``global name`` print statement came from our ``deal_with_it`` function.
 Whenever a function raises an exception, like ``uh_oh`` did,
 :py:class:`~Algorithm.run` captures the exception and populates an ``exc_info``
 key in the current algorithm run state dictionary. While ``exc_info`` is not
@@ -207,26 +205,6 @@ class Algorithm(object):
                 raise TypeError("Not a function: {}".format(repr(functions[0])))
         self.functions = list(functions)
         self.debug = _DebugMethod(self)
-
-
-    @classmethod
-    def from_dotted_name(cls, dotted_name, **kw):
-        """Construct a new instance from an algorithm definition module.
-
-        :param dotted_name: the dotted name of a Python module containing an
-            algorithm definition
-
-        :param kw: keyword arguments are passed through to the default constructor
-
-        An algorithm definition is a regular Python file. All functions defined
-        in the file whose name doesn't begin with ``_`` are loaded into a list
-        in the order they're defined in the file, and this list is passed to
-        the default class constructor. See the `tutorial`_ for an example.
-
-        """
-        module = cls._load_module_from_dotted_name(dotted_name)
-        functions = cls._load_functions_from_module(module)
-        return cls(*functions, **kw)
 
 
     def run(self, _raise_immediately=None, _return_after=None, **state):
@@ -385,33 +363,128 @@ class Algorithm(object):
         self.functions.remove(func)
 
 
+    @classmethod
+    def from_dotted_name(cls, dotted_name, **kw):
+        """Construct a new instance from an algorithm definition module.
+
+        :param dotted_name: the dotted name of a Python module containing an
+            algorithm definition
+
+        :param kw: keyword arguments are passed through to the default constructor
+
+        This is a convenience constructor that lets you take an algorithm
+        definition from a regular Python file. For example, create a file named
+        ``blah_algorithm.py`` on your ``PYTHONPATH``::
+
+            def foo():
+                return {'baz': 1}
+
+            def bar():
+                return {'buz': 2}
+
+            def bloo(baz, buz):
+                return {'sum': baz + buz}
+
+
+        Then pass the dotted name of the file to this constructor:
+
+        >>> blah = Algorithm.from_dotted_name('blah_algorithm')
+
+        All functions defined in the file whose name doesn't begin with ``_``
+        are loaded into a list in the order they're defined in the file, and
+        this list is passed to the default class constructor.
+
+        >>> blah.functions #doctest: +ELLIPSIS
+        [<function foo ...>, <function bar ...>, <function bloo ...>]
+
+        """
+        module = cls._load_module_from_dotted_name(dotted_name)
+        functions = cls._load_functions_from_module(module)
+        return cls(*functions, **kw)
+
+
     def debug(self, function):
-        """Given a function, return the same function with a breakpoint at the top.
+        """Given a function, return a copy of the function with a breakpoint
+        immediately inside it.
 
         :param function function: a function object
 
-        This method is basically a decorator that inserts a debugging
-        breakpoint at the very beginning of ``function``. It's useful when you
-        want to debug an an algorithm that you've composed using functions that
-        you don't have ready source access to (otherwise you could insert the
-        breakpoint yourself).
+        This method wraps the module-level function :py:func:`algorithm.debug`,
+        adding three conveniences.
 
-        Here's the sort of
+        First, calling this method not only returns a copy of the function with
+        a breakpoint installed, it actually replaces the old function in the
+        algorithm with the copy. So you can do:
 
-        As a convenience, this debug method itself can be accessed using
-        dictionary-style key access with the name of a function. This makes it
-        especially easy to debug a function that you were already accessing
-        using key access on the algorithm itself. So for example, if you want
-        to debug the ``foo`` function:
+        >>> def foo():
+        ...     pass
+        ...
+        >>> algo = Algorithm(foo)
+        >>> algo.debug(foo)             #doctest: +ELLIPSIS
+        <function foo at ...>
+        >>> algo.run()                  #doctest: +SKIP
+        (Pdb)
 
-        >>> blah_algorithm.functions = [ blah_algorithm['foo'] ]
+        Second, it provides a method on itself to install via function name
+        instead of function object:
 
-        You can just insert ``.debug``:
+        >>> algo = Algorithm(foo)
+        >>> algo.debug.by_name('foo')   #doctest: +ELLIPSIS
+        <function foo at ...>
+        >>> algo.run()                  #doctest: +SKIP
+        (Pdb)
 
-        >>> blah_algorithm.functions = [ blah_algorithm.debug['foo'] ]
+        Third, it aliases the :py:meth:`~DebugMethod.by_name` method as
+        :py:meth:`~_DebugMethod.__getitem__` so you can use mapping access as well:
 
-        Now when you
+        >>> algo = Algorithm(foo)
+        >>> algo.debug['foo']           #doctest: +ELLIPSIS
+        <function foo at ...>
+        >>> algo.run()                  #doctest: +SKIP
+        (Pdb)
 
+        Why would you want to do that? Well, let's say you've written a library
+        that includes an algorithm:
+
+        >>> def foo(): pass
+        ...
+        >>> def bar(): pass
+        ...
+        >>> def baz(): pass
+        ...
+        >>> blah = Algorithm(foo, bar, baz)
+
+        And now some user of your library ends up rebuilding the functions list
+        using some of the original functions and some of their own:
+
+        >>> def mine(): pass
+        ...
+        >>> def precious(): pass
+        ...
+        >>> blah.functions = [ blah['foo']
+        ...                  , mine
+        ...                  , blah['bar']
+        ...                  , precious
+        ...                  , blah['baz']
+        ...                   ]
+
+        Now the user of your library wants to debug ``blah['bar']``, but since
+        they're using your code as a library it's inconvenient for them to drop
+        a breakpoint in your source code. With this feature, they can just
+        insert ``.debug`` in their own source code like so:
+
+        >>> blah.functions = [ blah['foo']
+        ...                  , mine
+        ...                  , blah.debug['bar']
+        ...                  , precious
+        ...                  , blah['baz']
+        ...                   ]
+
+        Now when they run the algorithm they'll hit a pdb breakpoint just
+        inside your ``bar`` function:
+
+        >>> blah.run()              #doctest: +SKIP
+        (Pdb)
 
         """
         raise NotImplementedError  # Should be overriden by _DebugMethod in constructor.
@@ -464,38 +537,44 @@ class _DebugMethod(object):
                 self.algorithm.functions[i] = debugging_function
         return debugging_function
 
-    def __getitem__(self, name):
+    def by_name(self, name):
         return self(self.algorithm[name])
+
+    __getitem__ = by_name
 
 
 def debug(function):
-    """Given a function, set a breakpoint immediately inside it.
+    """Given a function, return a copy of the function with a breakpoint
+    immediately inside it.
 
-    Okay! This is so fun. :-)
+    :param function function: a function object
 
-    The idea here is that you want to be able to debug an algorithm function,
-    but it's inconvenient to get to the source in order to set a breakpoint. So
-    what we do here is construct a new function object with modified bytecode
-    (and attendent data structures). So this is basically a decorator, but it
-    would be useless in situations where you could decorate a function (because
-    then you have the source code in front of you and you could just insert the
-    breakpoint yourself).
+    Okay! This is fun. :-)
+
+    This is a decorator, because it takes a function and returns a function.
+    But it would be useless in situations where you could actually decorate a
+    function using the normal decorator syntax, because then you have the
+    source code in front of you and you could just insert the breakpoint
+    yourself. Instead, it's useful when you've got a function object from
+    somewhere else and you want to debug it. See the method
+    :py:meth:`Algorithm.debug` for an explanation of where this can be
+    interesting.
+
+    For our purposes here, it's enough to know that you can wrap any function:
 
     >>> def foo(bar, baz):
-    ...     print "Greetings, program!"
+    ...     return bar + baz
     ...
     >>> func = debug(foo)
-    >>> func()
-    blah
 
-    This function is available as a static method on the Algorithm class,
-    and also as a standalone function in the algorithm module. So you can
-    `from algorithm import debug` and use it that way, or since you
-    probably have an algorithm instance wherever you want to use this
-    function, you can also use it like so:
+    And then calling the function will drop you into pdb:
 
-    >>> blah = Algorithm.from_dotted_name('blah_algorithm')
-    >>> blah.debug_by_name('blah_algorithm')
+    >>> func(1, 2)                  #doctest: +SKIP
+    (Pdb)
+
+    The fun part is how this is implemented: we make a copy of the function
+    object you pass in, with the bytecode dynamically modified to insert the
+    code ``import pdb; pdb.set_trace()``. Neat, huh? :-)
 
     """
 
@@ -562,8 +641,13 @@ def debug(function):
             i += 2
             new_code += chr(oparg) + chr(0)
 
-    old_lnotab = function.__code__.co_lnotab
-    new_lnotab = (old_lnotab[:2] + chr(ord(old_lnotab[2]) + addr_pad) + old_lnotab[3:])
+    old = function.__code__.co_lnotab
+    new_lnotab = ( old[:2]
+                 + chr( (ord(old[2]) if len(old) > 2 else 0)
+                      + addr_pad
+                       )
+                 + old[3:]
+                  )
 
 
     # Now construct new code and function objects.
