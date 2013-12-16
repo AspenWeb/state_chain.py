@@ -586,20 +586,37 @@ def debug(function):
 
     NOARG = object()
 
-    codes = ( (b'LOAD_CONST', 0)
-            , (b'LOAD_CONST', None)
-            , (b'IMPORT_NAME', b'pdb')
-            , (b'STORE_GLOBAL', b'pdb')
-            , (b'LOAD_GLOBAL', b'pdb')
-            , (b'LOAD_ATTR', b'set_trace')
-            , (b'CALL_FUNCTION', 0)
-            , (b'POP_TOP', NOARG)
+    codes = ( ('LOAD_CONST', 0)
+            , ('LOAD_CONST', None)
+            , ('IMPORT_NAME', 'pdb')
+            , ('STORE_GLOBAL', 'pdb')
+            , ('LOAD_GLOBAL', 'pdb')
+            , ('LOAD_ATTR', 'set_trace')
+            , ('CALL_FUNCTION', 0)
+            , ('POP_TOP', NOARG)
              )
 
     new_names = function.__code__.co_names
     new_consts = function.__code__.co_consts
     new_code = b''
     addr_pad = 0
+
+    if sys.version_info < (3, 0, 0):
+        _chr = chr
+    else:
+
+        # In Python 3 chr returns a str (== 2's unicode), not a bytes (== 2's
+        # str). However, the func_new constructor wants a bytes for both code
+        # and lnotab. We use latin-1 to encode these to bytes, per the docs:
+        #
+        #   The simplest method is to map the codepoints 0-255 to the bytes
+        #   0x0-0xff. This means that a string object that contains codepoints
+        #   above U+00FF can't be encoded with this method (which is called
+        #   'latin-1' or 'iso-8859-1').
+        #
+        #   http://docs.python.org/3/library/codecs.html#encodings-and-unicode
+
+        _chr = lambda x: chr(x).encode('latin-1')
 
     for name, arg in codes:
 
@@ -608,7 +625,7 @@ def debug(function):
 
         addr_pad += 1
         op = opcode.opmap[name]
-        new_code += chr(op)
+        new_code += _chr(op)
         if op >= opcode.HAVE_ARGUMENT:
             addr_pad += 2
             if op in opcode.hasconst:
@@ -616,12 +633,15 @@ def debug(function):
                     new_consts += (arg,)
                 val = new_consts.index(arg)
             elif op in opcode.hasname:
+                if sys.version_info < (3, 0, 0):
+                    # In Python 3, func_new wants str (== unicode) for names.
+                    arg = arg.encode('ASCII')
                 if arg not in new_names:
                     new_names += (arg,)
                 val = new_names.index(arg)
             elif name == 'CALL_FUNCTION':
                 val = arg  # number of args
-            new_code += chr(val) + chr(0)
+            new_code += _chr(val) + _chr(0)
 
 
     # Finish inserting our new bytecode in front of the old.
@@ -634,52 +654,73 @@ def debug(function):
     n = len(old_code)
     while i < n:
         c = old_code[i]
+        if type(c) is int:
+            # In Python 3, index access on a bytestring returns an int.
+            c = _chr(c)
         op = ord(c)
         i += 1
         new_code += c
         if op >= opcode.HAVE_ARGUMENT:
-            oparg = ord(old_code[i]) + ord(old_code[i+1])*256
+            if sys.version_info < (3, 0, 0):
+                oparg = ord(old_code[i]) + ord(old_code[i+1])*256
+            else:
+                oparg = old_code[i] + old_code[i+1]*256
             if op in opcode.hasjabs:
                 oparg += addr_pad
             i += 2
-            new_code += chr(oparg) + chr(0)
+            new_code += _chr(oparg) + _chr(0)
 
     old = function.__code__.co_lnotab
     new_lnotab = ( old[:2]
-                 + chr( (ord(old[2]) if len(old) > 2 else 0)
-                      + addr_pad
-                       )
+                 + _chr( (ord(old[2]) if len(old) > 2 else 0)
+                       + addr_pad
+                        )
                  + old[3:]
                   )
 
 
     # Now construct new code and function objects.
     # ============================================
+    # See Objects/codeobject.c in Python source.
 
-    new_code = type(function.__code__)( function.__code__.co_argcount
-                                      , function.__code__.co_nlocals
-                                      , function.__code__.co_stacksize
-                                      , function.__code__.co_flags
+    common_args = ( function.__code__.co_nlocals
+                  , function.__code__.co_stacksize
+                  , function.__code__.co_flags
 
-                                      , new_code
-                                      , new_consts
-                                      , new_names
-                                      , function.__code__.co_varnames
+                  , new_code
+                  , new_consts
+                  , new_names
 
-                                      , function.__code__.co_filename
-                                      , function.__code__.co_name
-                                      , function.__code__.co_firstlineno
-                                      , new_lnotab
+                  , function.__code__.co_varnames
+                  , function.__code__.co_filename
+                  , function.__code__.co_name
+                  , function.__code__.co_firstlineno
 
-                                      , function.__code__.co_freevars
-                                      , function.__code__.co_cellvars
-                                       )
+                  , new_lnotab
 
-    new_function = type(function)( new_code
-                                 , function.func_globals
-                                 , function.func_name
-                                 , function.func_closure
-                                  )
+                  , function.__code__.co_freevars
+                  , function.__code__.co_cellvars
+                   )
+
+    if sys.version_info < (3, 0, 0):
+        new_code = type(function.__code__)(function.__code__.co_argcount, *common_args)
+        new_function = type(function)( new_code
+                                     , function.func_globals
+                                     , function.func_name
+                                     , function.func_defaults
+                                     , function.func_closure
+                                      )
+    else:
+        new_code = type(function.__code__)( function.__code__.co_argcount
+                                          , function.__code__.co_kwonlyargcount
+                                          , *common_args
+                                           )
+        new_function = type(function)( new_code
+                                     , function.__globals__
+                                     , function.__name__
+                                     , function.__defaults__
+                                     , function.__closure__
+                                      )
 
     return new_function
 
