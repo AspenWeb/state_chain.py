@@ -153,10 +153,10 @@ API Reference
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import collections
 import opcode
 import sys
 import types
-import traceback
 
 from dependency_injection import resolve_dependencies
 
@@ -166,21 +166,9 @@ __version__ = '1.0.0rc1-dev'
 
 if sys.version_info >= (3, 0, 0):
 
-    _get_func_code = lambda f: f.__code__
-    _get_func_name = lambda f: f.__name__
-
-    def _transfer_func_name(to, from_):
-        to.__name__ = from_.__name__
-
     def exec_(some_python, namespace):
         exec(some_python, namespace)
 else:
-
-    _get_func_code = lambda f: f.func_code
-    _get_func_name = lambda f: f.func_name
-
-    def _transfer_func_name(to, from_):
-        to.func_name = from_.func_name
 
     def exec_(some_python, namespace):
         # Have to double-exec because the Python 2 form is SyntaxError in 3.
@@ -218,9 +206,7 @@ class Algorithm(object):
     def __init__(self, *functions, **kw):
         self.default_raise_immediately = kw.pop('raise_immediately', False)
         if functions:
-            try:
-                _get_func_name(functions[0])
-            except AttributeError:
+            if not isinstance(functions[0], collections.Callable):
                 raise TypeError("Not a function: {0}".format(repr(functions[0])))
         self.functions = list(functions)
         self.debug = _DebugMethod(self)
@@ -289,7 +275,7 @@ class Algorithm(object):
         if 'exception' not in state:    state['exception'] = None
 
         for function in self.functions:
-            function_name = _get_func_name(function)
+            function_name = function.__name__
             try:
                 deps = resolve_dependencies(function, state)
                 have_exception = state['exception'] is not None
@@ -332,7 +318,7 @@ class Algorithm(object):
         """
         func = None
         for candidate in self.functions:
-            if _get_func_name(candidate) == name:
+            if candidate.__name__ == name:
                 func = candidate
                 break
         if func is None:
@@ -343,7 +329,7 @@ class Algorithm(object):
     def get_names(self):
         """Returns a list of the names of the functions in the :py:attr:`functions` list.
         """
-        return [_get_func_name(f) for f in self.functions]
+        return [f.__name__ for f in self.functions]
 
 
     def insert_before(self, name, newfunc):
@@ -526,7 +512,7 @@ class Algorithm(object):
             if type(obj) != types.FunctionType:
                 continue
             func = obj
-            lineno = _get_func_code(func).co_firstlineno
+            lineno = func.__code__.co_firstlineno
             functions_with_lineno.append((lineno, func))
         functions_with_lineno.sort()
         return [func for lineno, func in functions_with_lineno]
