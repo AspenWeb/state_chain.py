@@ -84,13 +84,13 @@ def test_can_run_through_algorithm(sys_path):
     sys_path.mk(FOO_PY)
     foo_algorithm = Algorithm.from_dotted_name('foo')
     state = foo_algorithm.run(val=None)
-    assert state == {'val': 3, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
+    assert state == {'val': 3, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
 
 def test_can_stop_algorithm_after_a_certain_point(sys_path):
     sys_path.mk(FOO_PY)
     foo_algorithm = Algorithm.from_dotted_name('foo')
     state = foo_algorithm.run(val=None, _return_after='baz')
-    assert state == {'val': 2, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
+    assert state == {'val': 2, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
 
 def test_error_raised_if_we_try_to_return_after_an_unknown_function(sys_path):
     sys_path.mk(FOO_PY)
@@ -106,7 +106,7 @@ def test_inserted_algorithm_steps_run(sys_path):
     foo_algorithm.insert_after('buz', biz)
     state = foo_algorithm.run(val=None)
 
-    assert state == {'val': 4, 'exc_info': None, 'state': state, 'algorithm':foo_algorithm}
+    assert state == {'val': 4, 'exception': None, 'state': state, 'algorithm':foo_algorithm}
 
 
 # Exception Handling
@@ -120,8 +120,8 @@ EXCEPT = ('foo.py', '''
     def baz():
         return {'val': 42}
 
-    def clear(exc_info):
-        return {'val': 666, 'exc_info': None}
+    def clear(exception):
+        return {'val': 666, 'exception': None}
 
 ''')
 
@@ -129,13 +129,13 @@ def test_exception_fast_forwards(sys_path):
     sys_path.mk(EXCEPT)
     foo_algorithm = Algorithm.from_dotted_name('foo')
     state = foo_algorithm.run()
-    assert state == {'val': 666, 'exc_info': None, 'state': state, 'algorithm': foo_algorithm}
+    assert state == {'val': 666, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
 
 def test_exception_raises_if_uncleared(sys_path):
     sys_path.mk(EXCEPT)
     foo_algorithm = Algorithm.from_dotted_name('foo')
     foo_algorithm.remove('clear')
-    raises(NameError, foo_algorithm.run)
+    raises(NameError, foo_algorithm.run).value
 
 def test_exception_raises_immediately_if_told_to_via_constructor(sys_path):
     sys_path.mk(EXCEPT)

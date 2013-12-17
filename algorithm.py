@@ -64,19 +64,18 @@ a dictionary representing the algorithm's final state:
 Okay!
 
 
-Modifications and Exceptions
-++++++++++++++++++++++++++++
+Modifying an Algorithm
+++++++++++++++++++++++
 
-Let's add two functions to the algorithm, to illustrate both algorithm
-modification and exception handling. First let's define the functions:
+Let's add two functions to the algorithm. First let's define the functions:
 
     >>> def uh_oh(baz):
     ...     if baz == 2:
     ...         raise heck
     ...
-    >>> def deal_with_it(exc_info):
+    >>> def deal_with_it(exception):
     ...     print("I am dealing with it!")
-    ...     return {'exc_info': None}
+    ...     return {'exception': None}
     ...
 
 
@@ -90,7 +89,7 @@ Now let's interpolate them into our algorithm. Let's put the ``uh_oh`` function 
 
 Then let's add our exception handler at the end:
 
-    >>> blah.functions.append(deal_with_it)
+    >>> blah.insert_after('bloo', deal_with_it)
     >>> blah.functions      #doctest: +ELLIPSIS
     [<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
 
@@ -102,20 +101,40 @@ Just for kicks, let's remove the ``foo`` function while we're at it:
     [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
 
 
-What happens when we run it? Since we no longer have the ``foo`` function
-providing a value for ``bar``, we'll need to supply that using a keyword
-argument to :py:func:`~Algorithm.run`:
+If you're making extension changes to an algorithm, you should feel free to
+directly manipulate the list of functions, rather than using the more
+cumbersome :py:meth:`~algorithm.Algorithm.insert_before`,
+:py:meth:`~algorithm.Algorithm.insert_after`, and
+:py:meth:`~algorithm.Algorithm.remove` methods. We could have achieved the same
+result like so:
+
+    >>> blah.functions = [ blah['bar']
+    ...                  , uh_oh
+    ...                  , blah['bloo']
+    ...                  , deal_with_it
+    ...                   ]
+    >>> blah.functions      #doctest: +ELLIPSIS
+    [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
+
+
+Either way, what happens when we run it? Since we no longer have the ``foo``
+function providing a value for ``bar``, we'll need to supply that using a
+keyword argument to :py:func:`~Algorithm.run`:
 
     >>> state = blah.run(baz=2)
     I am dealing with it!
 
 
-Whenever a function raises an exception, like ``uh_oh`` did,
-:py:class:`~Algorithm.run` captures the exception and populates an ``exc_info``
-key in the current algorithm run state dictionary. While ``exc_info`` is not
-``None``, any normal function is skipped, and only functions that ask for
-``exc_info`` get called. So in our example ``deal_with_it`` got called, but
-``bloo`` didn't, which is why there is no ``sum``:
+Exception Handling
+++++++++++++++++++
+
+Whenever a function raises an exception, like ``uh_oh`` did in the example
+above, :py:class:`~Algorithm.run` captures the exception and populates an
+``exception`` key in the current algorithm run state dictionary. While
+``exception`` is not ``None``, any normal function is skipped, and only
+functions that ask for ``exception`` get called. So in our example
+``deal_with_it`` got called, but ``bloo`` didn't, which is why there is no
+``sum``:
 
     >>> 'sum' in state
     False
@@ -229,33 +248,27 @@ class Algorithm(object):
 
          - ``algorithm`` - a reference to the parent :py:class:`Algorithm` instance
          - ``state`` - a circular reference to the state dictionary
-         - ``exc_info`` - ``None``
+         - ``exception`` - ``None``
 
         For each function in the :py:attr:`functions` list, we look at the
-        function signature and compare it to the current value of ``exc_info``
-        in the state dictionary. If ``exc_info`` is ``None`` then we skip any
-        function that asks for ``exc_info``, and if ``exc_info`` is *not*
+        function signature and compare it to the current value of ``exception``
+        in the state dictionary. If ``exception`` is ``None`` then we skip any
+        function that asks for ``exception``, and if ``exception`` is *not*
         ``None`` then we only call functions that *do* ask for it. The upshot
         is that any function that raises an exception will cause us to
         fast-forward to the next exception-handling function in the list.
 
         Here are some further notes on exception handling:
 
-         - If a function provides a default value for ``exc_info``, then that
+         - If a function provides a default value for ``exception``, then that
            function will be called whether or not there is an exception being
            handled.
 
-         - You should return ``{'exc_info': None}`` to reset exception
-           handling. We call :py:func:`sys.exc_clear` for you in this case.
+         - You should return ``{'exception': None}`` to reset exception
+           handling.
 
-         - As advised in the Python docs for :py:func:`sys.exc_info`, we avoid
-           assigning the third item of the return value of that function, a
-           traceback object, to a local variable. Instead, we replace it with a
-           string representation of the traceback. Your handler should call
-           :func:`sys.exc_info` directly if you need the full traceback object.
-
-         - If ``exc_info`` is not ``None`` after all functions have been run,
-           then we re-raise the current exception.
+         - If ``exception`` is not ``None`` after all functions have been run,
+           then we re-raise it.
 
          - If ``raise_immediately`` evaluates to ``True`` (looking first at any
            per-call ``_raise_immediately`` and then at the instance default),
@@ -273,34 +286,32 @@ class Algorithm(object):
 
         if 'algorithm' not in state:    state['algorithm'] = self
         if 'state' not in state:        state['state'] = state
-        if 'exc_info' not in state:     state['exc_info'] = None
+        if 'exception' not in state:    state['exception'] = None
 
         for function in self.functions:
             function_name = _get_func_name(function)
             try:
                 deps = resolve_dependencies(function, state)
-                have_exc_info = state['exc_info'] is not None
-                if 'exc_info' in deps.signature.required and not have_exc_info:
-                    pass    # Function wants exc_info but we don't have it.
-                elif 'exc_info' not in deps.signature.parameters and have_exc_info:
-                    pass    # Function doesn't want exc_info but we have it.
+                have_exception = state['exception'] is not None
+                if 'exception' in deps.signature.required and not have_exception:
+                    pass    # Function wants exception but we don't have it.
+                elif 'exception' not in deps.signature.parameters and have_exception:
+                    pass    # Function doesn't want exception but we have it.
                 else:
                     new_state = function(**deps.as_kwargs)
                     if new_state is not None:
-                        if 'exc_info' in new_state:
-                            if new_state['exc_info'] is None:
-                                sys.exc_clear()
                         state.update(new_state)
             except:
-                state['exc_info'] = sys.exc_info()[:2] + (traceback.format_exc().strip(),)
+                ExceptionClass, exception = sys.exc_info()[:2]
+                state['exception'] = exception
                 if _raise_immediately:
                     raise
 
             if _return_after is not None and function_name == _return_after:
                 break
 
-        if state['exc_info'] is not None:
-            raise
+        if state['exception'] is not None:
+            raise state['exception']
 
         return state
 
@@ -335,18 +346,18 @@ class Algorithm(object):
         return [_get_func_name(f) for f in self.functions]
 
 
-    def insert_after(self, name, newfunc):
-        """Insert ``newfunc`` in the :py:attr:`functions` list after the function named
-        ``name``, or raise :py:exc:`FunctionNotFound`.
-        """
-        self.insert_relative_to(name, newfunc, relative_position=1)
-
-
     def insert_before(self, name, newfunc):
         """Insert ``newfunc`` in the :py:attr:`functions` list before the function named
         ``name``, or raise :py:exc:`FunctionNotFound`.
         """
         self.insert_relative_to(name, newfunc, relative_position=0)
+
+
+    def insert_after(self, name, newfunc):
+        """Insert ``newfunc`` in the :py:attr:`functions` list after the function named
+        ``name``, or raise :py:exc:`FunctionNotFound`.
+        """
+        self.insert_relative_to(name, newfunc, relative_position=1)
 
 
     def insert_relative_to(self, name, newfunc, relative_position):
