@@ -2,8 +2,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import sys
 
+import traceback
 from pytest import raises, yield_fixture
-from algorithm import Algorithm, FunctionNotFound
+from algorithm import Algorithm, FunctionNotFound, PYTHON_2
 from filesystem_tree import FilesystemTree
 
 
@@ -135,7 +136,37 @@ def test_exception_raises_if_uncleared(sys_path):
     sys_path.mk(EXCEPT)
     foo_algorithm = Algorithm.from_dotted_name('foo')
     foo_algorithm.remove('clear')
-    raises(NameError, foo_algorithm.run).value
+    raises(NameError, foo_algorithm.run)
+
+def test_traceback_for_uncleared_exception_reaches_back_to_original_raise(sys_path):
+    sys_path.mk(EXCEPT)
+    foo_algorithm = Algorithm.from_dotted_name('foo')
+    foo_algorithm.remove('clear')
+    try:
+        foo_algorithm.run()
+    except:
+        tb = traceback.format_exc()
+
+    # We get an extra frame under Python 3, but what we don't want is not
+    # enough frames.
+
+    assert len(tb.splitlines()) == (8 if PYTHON_2 else 10)
+
+def test_function_can_have_default_value_for_exception_to_be_always_called(sys_path):
+    sys_path.mk(EXCEPT)
+    foo_algorithm = Algorithm.from_dotted_name('foo')
+
+    # Add a both-handling function.
+    def both(exception=None):
+        return {'exception': None, 'um': 'yeah'}
+    foo_algorithm.insert_before('clear', both)
+
+    # Exception case.
+    assert foo_algorithm.run()['um'] == 'yeah'
+
+    # Non-exception case.
+    foo_algorithm.remove('bar')
+    assert foo_algorithm.run()['um'] == 'yeah'
 
 def test_exception_raises_immediately_if_told_to_via_constructor(sys_path):
     sys_path.mk(EXCEPT)

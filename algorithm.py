@@ -132,9 +132,9 @@ Whenever a function raises an exception, like ``uh_oh`` did in the example
 above, :py:class:`~Algorithm.run` captures the exception and populates an
 ``exception`` key in the current algorithm run state dictionary. While
 ``exception`` is not ``None``, any normal function is skipped, and only
-functions that ask for ``exception`` get called. So in our example
-``deal_with_it`` got called, but ``bloo`` didn't, which is why there is no
-``sum``:
+functions that ask for ``exception`` get called. It's like a fast-forward. So
+in our example ``deal_with_it`` got called, but ``bloo`` didn't, which is why
+there is no ``sum``:
 
     >>> 'sum' in state
     False
@@ -162,17 +162,16 @@ from dependency_injection import resolve_dependencies
 
 
 __version__ = '1.0.0rc1-dev'
+PYTHON_2 = sys.version_info < (3, 0, 0)
 
 
-if sys.version_info >= (3, 0, 0):
-
-    def exec_(some_python, namespace):
-        exec(some_python, namespace)
-else:
-
+if PYTHON_2:
     def exec_(some_python, namespace):
         # Have to double-exec because the Python 2 form is SyntaxError in 3.
         exec("exec some_python in namespace")
+else:
+    def exec_(some_python, namespace):
+        exec(some_python, namespace)
 
 
 class FunctionNotFound(KeyError):
@@ -251,7 +250,9 @@ class Algorithm(object):
            handled.
 
          - You should return ``{'exception': None}`` to reset exception
-           handling.
+           handling. Under Python 2 we will call ``sys.exc_clear`` for you
+           (under Python 3 exceptions are cleared automatically at the end of
+           except blocks).
 
          - If ``exception`` is not ``None`` after all functions have been run,
            then we re-raise it.
@@ -286,6 +287,10 @@ class Algorithm(object):
                 else:
                     new_state = function(**deps.as_kwargs)
                     if new_state is not None:
+                        if PYTHON_2:
+                            if 'exception' in new_state:
+                                if new_state['exception'] is None:
+                                    sys.exc_clear()
                         state.update(new_state)
             except:
                 ExceptionClass, exception = sys.exc_info()[:2]
@@ -297,7 +302,23 @@ class Algorithm(object):
                 break
 
         if state['exception'] is not None:
-            raise state['exception']
+            if PYTHON_2:
+
+                # Under Python 2, raising state['exception'] means the
+                # traceback stops at this reraise. We want the traceback to go
+                # back to where the exception was first raised, and a naked
+                # raise will reraise the current exception.
+
+                raise
+
+            else:
+
+                # Under Python 3, exceptions are cleared at the end of the
+                # except block, meaning we have no current exception to reraise
+                # here. Thankfully, the traceback off this reraise will show
+                # back to the original exception.
+
+                raise state['exception']
 
         return state
 
@@ -598,7 +619,7 @@ def debug(function):
     new_code = b''
     addr_pad = 0
 
-    if sys.version_info < (3, 0, 0):
+    if PYTHON_2:
         _chr = chr
     else:
 
@@ -630,7 +651,7 @@ def debug(function):
                     new_consts += (arg,)
                 val = new_consts.index(arg)
             elif op in opcode.hasname:
-                if sys.version_info < (3, 0, 0):
+                if PYTHON_2:
                     # In Python 3, func_new wants str (== unicode) for names.
                     arg = arg.encode('ASCII')
                 if arg not in new_names:
@@ -658,7 +679,7 @@ def debug(function):
         i += 1
         new_code += c
         if op >= opcode.HAVE_ARGUMENT:
-            if sys.version_info < (3, 0, 0):
+            if PYTHON_2:
                 oparg = ord(old_code[i]) + ord(old_code[i+1])*256
             else:
                 oparg = old_code[i] + old_code[i+1]*256
@@ -699,7 +720,7 @@ def debug(function):
                   , function.__code__.co_cellvars
                    )
 
-    if sys.version_info < (3, 0, 0):
+    if PYTHON_2:
         new_code = type(function.__code__)(function.__code__.co_argcount, *common_args)
         new_function = type(function)( new_code
                                      , function.func_globals
