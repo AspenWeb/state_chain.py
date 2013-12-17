@@ -101,7 +101,7 @@ Just for kicks, let's remove the ``foo`` function while we're at it:
     [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
 
 
-If you're making extension changes to an algorithm, you should feel free to
+If you're making extensive changes to an algorithm, you should feel free to
 directly manipulate the list of functions, rather than using the more
 cumbersome :py:meth:`~algorithm.Algorithm.insert_before`,
 :py:meth:`~algorithm.Algorithm.insert_after`, and
