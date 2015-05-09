@@ -353,32 +353,53 @@ class Algorithm(object):
         return [f.__name__ for f in self.functions]
 
 
-    def insert_before(self, name, newfunc):
-        """Insert ``newfunc`` in the :py:attr:`functions` list before the function named
+    def insert_before(self, name, *newfuncs):
+        """Insert ``newfuncs`` in the :py:attr:`functions` list before the function named
         ``name``, or raise :py:exc:`FunctionNotFound`.
+
+        >>> def foo(): pass
+        >>> algo = Algorithm(foo)
+        >>> def bar(): pass
+        >>> algo.insert_before('foo', bar)
+        >>> algo.get_names()
+        ['bar', 'foo']
+        >>> def baz(): pass
+        >>> algo.insert_before('foo', baz)
+        >>> algo.get_names()
+        ['bar', 'baz', 'foo']
+
         """
-        self.insert_relative_to(name, newfunc, relative_position=0)
+        i = self.functions.index(self[name])
+        self.functions[i:i] = newfuncs
 
 
-    def insert_after(self, name, newfunc):
-        """Insert ``newfunc`` in the :py:attr:`functions` list after the function named
+    def insert_after(self, name, *newfuncs):
+        """Insert ``newfuncs`` in the :py:attr:`functions` list after the function named
         ``name``, or raise :py:exc:`FunctionNotFound`.
+
+        >>> def foo(): pass
+        >>> algo = Algorithm(foo)
+        >>> def bar(): pass
+        >>> algo.insert_after('foo', bar)
+        >>> algo.get_names()
+        ['foo', 'bar']
+        >>> def baz(): pass
+        >>> algo.insert_after('bar', baz)
+        >>> algo.get_names()
+        ['foo', 'bar', 'baz']
+
         """
-        self.insert_relative_to(name, newfunc, relative_position=1)
+        i = self.functions.index(self[name]) + 1
+        self.functions[i:i] = newfuncs
 
 
-    def insert_relative_to(self, name, newfunc, relative_position):
-        func = self[name]
-        index = self.functions.index(func) + relative_position
-        self.functions.insert(index, newfunc)
-
-
-    def remove(self, name):
-        """Remove the function named ``name`` from the :py:attr:`functions` list, or raise
+    def remove(self, *names):
+        """Remove the functions named ``name`` from the :py:attr:`functions` list, or raise
         :py:exc:`FunctionNotFound`.
         """
-        func = self[name]
-        self.functions.remove(func)
+        for name in names:
+            func = self[name]
+            self.functions.remove(func)
 
 
     @classmethod
