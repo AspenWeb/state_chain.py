@@ -201,6 +201,9 @@ class Algorithm(object):
     functions = None        #: A list of functions comprising the algorithm.
     default_raise_immediately = False
 
+    START = -1
+    END = -2
+
 
     def __init__(self, *functions, **kw):
         self.default_raise_immediately = kw.pop('raise_immediately', False)
@@ -367,9 +370,23 @@ class Algorithm(object):
         >>> algo.insert_before('foo', baz)
         >>> algo.get_names()
         ['bar', 'baz', 'foo']
+        >>> def bal(): pass
+        >>> algo.insert_before(Algorithm.START, bal)
+        >>> algo.get_names()
+        ['bal', 'bar', 'baz', 'foo']
+        >>> def bah(): pass
+        >>> algo.insert_before(Algorithm.END, bah)
+        >>> algo.get_names()
+        ['bal', 'bar', 'baz', 'foo', 'bah']
+
 
         """
-        i = self.functions.index(self[name])
+        if name == self.START:
+            i = 0
+        elif name == self.END:
+            i = len(self.functions)
+        else:
+            i = self.functions.index(self[name])
         self.functions[i:i] = newfuncs
 
 
@@ -387,9 +404,22 @@ class Algorithm(object):
         >>> algo.insert_after('bar', baz)
         >>> algo.get_names()
         ['foo', 'bar', 'baz']
+        >>> def bal(): pass
+        >>> algo.insert_after(Algorithm.START, bal)
+        >>> algo.get_names()
+        ['bal', 'foo', 'bar', 'baz']
+        >>> def bah(): pass
+        >>> algo.insert_before(Algorithm.END, bah)
+        >>> algo.get_names()
+        ['bal', 'foo', 'bar', 'baz', 'bah']
 
         """
-        i = self.functions.index(self[name]) + 1
+        if name == self.START:
+            i = 0
+        elif name == self.END:
+            i = len(self.functions)
+        else:
+            i = self.functions.index(self[name]) + 1
         self.functions[i:i] = newfuncs
 
 
