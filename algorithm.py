@@ -441,8 +441,8 @@ class Algorithm(object):
 
         :param kw: keyword arguments are passed through to the default constructor
 
-        This is a convenience constructor to create algorithm definition from a
-        regular Python file. For example, create a file named
+        This is a convenience constructor to instantiate an algorithm based on
+        functions defined in a regular Python file. For example, create a file named
         ``blah_algorithm.py`` on your ``PYTHONPATH``::
 
             def foo():
