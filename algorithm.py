@@ -434,15 +434,15 @@ class Algorithm(object):
 
     @classmethod
     def from_dotted_name(cls, dotted_name, **kw):
-        """Construct a new instance from an algorithm definition module.
+        """Construct a new instance from functions defined in a Python module.
 
-        :param dotted_name: the dotted name of a Python module containing an
-            algorithm definition
+        :param dotted_name: the dotted name of a Python module that contains
+            functions that will be added to algorithm in the order of appearance.
 
         :param kw: keyword arguments are passed through to the default constructor
 
-        This is a convenience constructor that lets you take an algorithm
-        definition from a regular Python file. For example, create a file named
+        This is a convenience constructor to instantiate an algorithm based on
+        functions defined in a regular Python file. For example, create a file named
         ``blah_algorithm.py`` on your ``PYTHONPATH``::
 
             def foo():
@@ -465,6 +465,11 @@ class Algorithm(object):
 
         >>> blah.functions #doctest: +ELLIPSIS
         [<function foo ...>, <function bar ...>, <function bloo ...>]
+        
+        For this specific module, the code above is equivalent to:
+        
+        >>> from blah_algorithm import foo, bar, bloo
+        >>> Algorithm(foo, bar, bloo)
 
         """
         module = cls._load_module_from_dotted_name(dotted_name)
