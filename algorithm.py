@@ -1,5 +1,9 @@
-"""Model an algorithm as a list of functions.
+"""Model an algorithm as a list of functions and shared state.
 
+This module provides an abstraction for implementing arbitrary algorithms as a
+list of functions that operate on a shared state dictionary. Algorithms defined
+this way are easy to arbitrarily modify at run time, and they provide cascading
+exception handling.
 
 Installation
 ------------
@@ -20,11 +24,8 @@ Python 2.6, 2.7, 3.2, and 3.3.
 
 Tutorial
 --------
-
-This module provides an abstraction for implementing arbitrary algorithms as a
-list of functions that operate on a shared state dictionary. Algorithms defined
-this way are easy to arbitrarily modify at run time, and they provide cascading
-exception handling.
+The algorithm model is a list of functions that are executed in
+defined order and update algorithm state stored in `state` dictionary.
 
 To get started, define some functions:
 
@@ -39,9 +40,12 @@ To get started, define some functions:
     ...
 
 
-Each function returns a :py:class:`dict`, which is used to update the state of
-the current run of the algorithm. Names from the state dictionary are made
-available to downstream functions via :py:mod:`dependency_injection`. Now
+Each function returns a :py:class:`dict`, which updates the state of
+the current run of the algorithm. Parameters for every function are
+automatically fetched from `state` dictionary, using their names as
+a key. This is done by :py:mod:`dependency_injection` module.
+
+Now
 make an :py:class:`Algorithm` object:
 
     >>> from algorithm import Algorithm
