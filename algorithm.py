@@ -24,8 +24,9 @@ Python 2.6, 2.7, 3.2, and 3.3.
 
 Tutorial
 --------
-The algorithm model is a list of functions that are executed in
-defined order and update algorithm state stored in `state` dictionary.
+The algorithm in this module is a list of functions that are
+executed in defined order, the return values of which update the
+algorithm's run state in a `state` dictionary.
 
 To get started, define some functions:
 
@@ -42,8 +43,8 @@ To get started, define some functions:
 
 Each function returns a :py:class:`dict`, which updates the state of
 the current run of the algorithm. Parameters for every function are
-automatically fetched from `state` dictionary, using their names as
-a key. This is done by :py:mod:`dependency_injection` module.
+automatically fetched from the `state` dictionary, using their names as
+a key. This is done by the :py:mod:`dependency_injection` module.
 
 Now
 make an :py:class:`Algorithm` object:
