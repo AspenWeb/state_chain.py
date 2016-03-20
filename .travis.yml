@@ -12,3 +12,6 @@ script:
   - ./runtests.sh
 notifications:
   email: false
+branches:
+  only:
+    - master
