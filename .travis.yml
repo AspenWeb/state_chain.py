@@ -12,11 +12,3 @@ script:
   - ./runtests.sh
 notifications:
   email: false
-  irc: 
-    channels:
-      - "irc.freenode.org#gittip"
-    on_success: change
-    on_failure: always
-    template:
-      - "%{repository} (%{branch}:%{commit} by %{author}): %{message} (%{build_url})"
-    skip_join: true
