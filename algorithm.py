@@ -8,13 +8,13 @@ Installation
 
     $ pip install algorithm
 
-We `test <https://travis-ci.org/gittip/algorithm.py>`_ against
+We `test <https://travis-ci.org/AspenWeb/algorithm.py>`_ against
 Python 2.6, 2.7, 3.2, and 3.3.
 
 :py:mod:`algorithm` is MIT-licensed.
 
 
-.. _GitHub: https://github.com/gittip/algorithm.py
+.. _GitHub: https://github.com/AspenWeb/algorithm.py
 .. _PyPI: https://pypi.python.org/pypi/algorithm
 
 
