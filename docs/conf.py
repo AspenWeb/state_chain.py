@@ -48,7 +48,7 @@ copyright = u'Chad Whitacre et al.'
 # built documents.
 #
 # The full version, including alpha/beta/rc tags.
-release = '1.0.0-dev'
+release = '1.1.0'
 # The short X.Y version.
 version = '.'.join(release.split('.')[:2])
 
