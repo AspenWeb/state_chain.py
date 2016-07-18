@@ -4,11 +4,11 @@ from setuptools import setup
 
 
 setup( name='algorithm'
-     , author='Gittip, LLC'
-     , author_email='support@gittip.com'
+     , author='Chad Whitacre et al.'
+     , author_email='team@aspen.io'
      , description="Model an algorithm as a list of functions."
      , url='http://algorithm-py.readthedocs.org/'
-     , version='1.0.0-dev'
+     , version='1.1.0'
      , py_modules=['algorithm']
      , install_requires=['dependency_injection']
      , classifiers=[ 'Development Status :: 5 - Production/Stable'
