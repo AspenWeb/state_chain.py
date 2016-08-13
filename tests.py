@@ -4,7 +4,7 @@ import sys
 
 import traceback
 from pytest import raises, yield_fixture
-from algorithm import Algorithm, FunctionNotFound, PYTHON_2
+from algorithm import Algorithm, FunctionNotFound
 from filesystem_tree import FilesystemTree
 
 
@@ -154,11 +154,10 @@ def test_traceback_for_uncleared_exception_reaches_back_to_original_raise(sys_pa
         foo_algorithm.run()
     except:
         tb = traceback.format_exc()
-
-    # We get an extra frame under Python 3, but what we don't want is not
-    # enough frames.
-
-    assert len(tb.splitlines()) == (8 if PYTHON_2 else 10)
+    lines = tb.splitlines()
+    assert lines[-1][:11] == 'NameError: '
+    assert "'heck'" in lines[-1]
+    assert len(lines) == 10
 
 def test_function_can_have_default_value_for_exception_to_be_always_called(sys_path):
     sys_path.mk(EXCEPT)

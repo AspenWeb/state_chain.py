@@ -296,6 +296,7 @@ class Algorithm(object):
                             return function
                 except:
                     handle_exception()
+            raise  # exception hasn't been handled, reraise
 
         for function in functions_iter:
             try:
@@ -313,25 +314,6 @@ class Algorithm(object):
             if _return_after is not None:
                 if function.__name__ == _return_after:
                     break
-
-        if state['exception'] is not None:
-            if PYTHON_2:
-
-                # Under Python 2, raising state['exception'] means the
-                # traceback stops at this reraise. We want the traceback to go
-                # back to where the exception was first raised, and a naked
-                # raise will reraise the current exception.
-
-                raise
-
-            else:
-
-                # Under Python 3, exceptions are cleared at the end of the
-                # except block, meaning we have no current exception to reraise
-                # here. Thankfully, the traceback off this reraise will show
-                # back to the original exception.
-
-                raise state['exception']
 
         return state
 
