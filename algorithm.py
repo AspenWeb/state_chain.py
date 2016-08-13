@@ -279,7 +279,6 @@ class Algorithm(object):
         if 'exception' not in state:    state['exception'] = None
 
         for function in self.functions:
-            function_name = function.__name__
             try:
                 deps = resolve_dependencies(function, state)
                 have_exception = state['exception'] is not None
@@ -300,8 +299,9 @@ class Algorithm(object):
                     raise
                 state['exception'] = sys.exc_info()[1]
 
-            if _return_after is not None and function_name == _return_after:
-                break
+            if _return_after is not None:
+                if function.__name__ == _return_after:
+                    break
 
         if state['exception'] is not None:
             if PYTHON_2:
