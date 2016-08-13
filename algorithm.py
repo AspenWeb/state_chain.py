@@ -610,7 +610,7 @@ class Algorithm(object):
             lineno = func.__code__.co_firstlineno
             functions_with_lineno.append((lineno, func))
         functions_with_lineno.sort()
-        return [func for lineno, func in functions_with_lineno]
+        return [f for i, f in functions_with_lineno]
 
 
 # Debugging Helpers
