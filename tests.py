@@ -132,9 +132,19 @@ def test_exception_fast_forwards(sys_path):
     state = foo_algorithm.run()
     assert state == {'val': 666, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
 
+def assert_false():
+    assert False
+
+def clear_exception(state, exception):
+    state['exception'] = None
+
+def dont_call_me(exception):
+    raise Exception("I said don't call me!")
+
+def test_exception_handlers_are_skipped_when_there_is_no_exception(sys_path):
+    Algorithm(dont_call_me, assert_false, clear_exception, dont_call_me).run()
+
 def test_exc_info_is_available_during_exception_handling(sys_path):
-    def assert_false():
-        assert False
     def check_exc_info(exception):
         assert sys.exc_info()[1] is exception
         return {'exception': None}
