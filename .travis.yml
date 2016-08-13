@@ -4,11 +4,8 @@ python:
   - 2.7
   - 3.2
   - 3.3
-install:
-  - pip install --upgrade filesystem_tree pytest>=2.4
-  - pip install ./
-script:
-  - ./runtests.sh
+install: pip install tox-travis
+script: tox
 notifications:
   email: false
 branches:
