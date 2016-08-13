@@ -296,8 +296,7 @@ class Algorithm(object):
                                     sys.exc_clear()
                         state.update(new_state)
             except:
-                ExceptionClass, exception = sys.exc_info()[:2]
-                state['exception'] = exception
+                state['exception'] = sys.exc_info()[1]
                 if _raise_immediately:
                     raise
 
