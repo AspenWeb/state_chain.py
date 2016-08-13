@@ -278,26 +278,37 @@ class Algorithm(object):
         if 'state' not in state:        state['state'] = state
         if 'exception' not in state:    state['exception'] = None
 
-        for function in self.functions:
-            try:
-                deps = resolve_dependencies(function, state)
-                have_exception = state['exception'] is not None
-                if 'exception' in deps.signature.required and not have_exception:
-                    pass    # Function wants exception but we don't have it.
-                elif 'exception' not in deps.signature.parameters and have_exception:
-                    pass    # Function doesn't want exception but we have it.
-                else:
+        functions_iter = iter(self.functions)
+
+        def handle_exception():
+            state['exception'] = sys.exc_info()[1]
+            for function in functions_iter:
+                try:
+                    deps = resolve_dependencies(function, state)
+                    if 'exception' not in deps.signature.parameters:
+                        continue  # Function doesn't want exception
                     new_state = function(**deps.as_kwargs)
                     if new_state is not None:
-                        if PYTHON_2:
-                            if 'exception' in new_state:
-                                if new_state['exception'] is None:
-                                    sys.exc_clear()
                         state.update(new_state)
+                        if state['exception'] is None:
+                            if PYTHON_2:
+                                sys.exc_clear()
+                            return function
+                except:
+                    handle_exception()
+
+        for function in functions_iter:
+            try:
+                deps = resolve_dependencies(function, state)
+                new_state = function(**deps.as_kwargs)
+                if new_state is not None:
+                    state.update(new_state)
+                    if state['exception'] is not None:
+                        raise state['exception']
             except:
                 if _raise_immediately:
                     raise
-                state['exception'] = sys.exc_info()[1]
+                function = handle_exception()
 
             if _return_after is not None:
                 if function.__name__ == _return_after:
