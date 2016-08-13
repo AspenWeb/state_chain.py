@@ -487,7 +487,7 @@ class Algorithm(object):
         For this specific module, the code above is equivalent to:
         
         >>> from blah_algorithm import foo, bar, bloo
-        >>> Algorithm(foo, bar, bloo)
+        >>> blah = Algorithm(foo, bar, bloo)
 
         """
         module = cls._load_module_from_dotted_name(dotted_name)
