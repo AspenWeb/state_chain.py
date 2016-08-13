@@ -167,7 +167,7 @@ def test_traceback_for_uncleared_exception_reaches_back_to_original_raise(sys_pa
     lines = tb.splitlines()
     assert lines[-1][:11] == 'NameError: '
     assert "'heck'" in lines[-1]
-    assert len(lines) == 10
+    assert len(lines) == 12, tb
 
 def test_function_can_have_default_value_for_exception_to_be_always_called(sys_path):
     sys_path.mk(EXCEPT)

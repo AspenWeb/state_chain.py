@@ -280,40 +280,41 @@ class Algorithm(object):
 
         functions_iter = iter(self.functions)
 
-        def handle_exception():
-            state['exception'] = sys.exc_info()[1]
+        def loop(in_except, prev_func):
             for function in functions_iter:
+                if _return_after is not None and prev_func is not None:
+                    if prev_func.__name__ == _return_after:
+                        break
                 try:
                     deps = resolve_dependencies(function, state)
-                    if 'exception' not in deps.signature.parameters:
-                        continue  # Function doesn't want exception
-                    new_state = function(**deps.as_kwargs)
-                    if new_state is not None:
-                        state.update(new_state)
-                        if state['exception'] is None:
+                    skip = (
+                        # When function wants exception but we don't have it.
+                        not in_except and 'exception' in deps.signature.required
+                        or
+                        # When function doesn't want exception but we have it.
+                        in_except and 'exception' not in deps.signature.parameters
+                    )
+                    if not skip:
+                        new_state = function(**deps.as_kwargs)
+                        if new_state is not None:
+                            state.update(new_state)
+                        if in_except and state['exception'] is None:
+                            # exception is cleared, return to normal flow
                             if PYTHON_2:
                                 sys.exc_clear()
                             return function
                 except:
-                    handle_exception()
-            raise  # exception hasn't been handled, reraise
+                    if _raise_immediately:
+                        raise
+                    state['exception'] = sys.exc_info()[1]
+                    function = loop(True, function)
+                    if in_except:
+                        return function
+                prev_func = function
+            if in_except:
+                raise  # exception hasn't been handled, reraise
 
-        for function in functions_iter:
-            try:
-                deps = resolve_dependencies(function, state)
-                new_state = function(**deps.as_kwargs)
-                if new_state is not None:
-                    state.update(new_state)
-                    if state['exception'] is not None:
-                        raise state['exception']
-            except:
-                if _raise_immediately:
-                    raise
-                function = handle_exception()
-
-            if _return_after is not None:
-                if function.__name__ == _return_after:
-                    break
+        loop(False, None)
 
         return state
 
