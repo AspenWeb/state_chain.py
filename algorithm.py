@@ -819,4 +819,5 @@ def debug(function):
 
 if __name__ == '__main__':
     import doctest
-    doctest.testmod()
+    import sys
+    sys.exit(min(doctest.testmod()[0], 1))
