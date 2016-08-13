@@ -132,6 +132,14 @@ def test_exception_fast_forwards(sys_path):
     state = foo_algorithm.run()
     assert state == {'val': 666, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
 
+def test_exc_info_is_available_during_exception_handling(sys_path):
+    def assert_false():
+        assert False
+    def check_exc_info(exception):
+        assert sys.exc_info()[1] is exception
+        return {'exception': None}
+    Algorithm(assert_false, check_exc_info).run()
+
 def test_exception_raises_if_uncleared(sys_path):
     sys_path.mk(EXCEPT)
     foo_algorithm = Algorithm.from_dotted_name('foo')
