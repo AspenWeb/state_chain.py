@@ -257,6 +257,10 @@ class Algorithm(object):
            (under Python 3 exceptions are cleared automatically at the end of
            except blocks).
 
+         - If an exception is raised by a function handling another exception,
+           then ``exception`` is set to the new one and we look for the next
+           exception handler.
+
          - If ``exception`` is not ``None`` after all functions have been run,
            then we re-raise it.
 
@@ -264,6 +268,11 @@ class Algorithm(object):
            per-call ``_raise_immediately`` and then at the instance default),
            then we re-raise any exception immediately instead of
            fast-forwarding to the next exception handler.
+
+         - When an exception occurs, the functions that accept an ``exception``
+           argument will be called from inside the ``except:`` block, so you
+           can access ``sys.exc_info`` (which contains the traceback) even
+           under Python 3.
 
         """
 
@@ -278,6 +287,11 @@ class Algorithm(object):
         if 'state' not in state:        state['state'] = state
         if 'exception' not in state:    state['exception'] = None
 
+        # The `for` loop in the `loop()` function below can be entered multiple
+        # times since that function calls itself when an exception is raised.
+        # If we looped over the `functions` list we'd be starting from the top
+        # at each exception, and that's not what we want, so we use an iterator
+        # instead to keep track of where we are in the algorithm.
         functions_iter = iter(self.functions)
 
         def loop(in_except, prev_func):
@@ -309,6 +323,9 @@ class Algorithm(object):
                     state['exception'] = sys.exc_info()[1]
                     function = loop(True, function)
                     if in_except:
+                        # an exception occurred while we were handling another
+                        # exception, but now it's been cleared, so we return to
+                        # the normal flow
                         return function
                 prev_func = function
             if in_except:
