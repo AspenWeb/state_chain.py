@@ -182,6 +182,15 @@ class FunctionNotFound(KeyError):
         return "The function '{0}' isn't in this algorithm.".format(*self.args)
 
 
+_NO_PREVIOUS = object()
+
+def _iter_with_previous(iterable):
+    prev = _NO_PREVIOUS
+    for o in iterable:
+        yield o, prev
+        prev = o
+
+
 class Algorithm(object):
     """Model an algorithm as a list of functions.
 
@@ -292,11 +301,11 @@ class Algorithm(object):
         # If we looped over the `functions` list we'd be starting from the top
         # at each exception, and that's not what we want, so we use an iterator
         # instead to keep track of where we are in the algorithm.
-        functions_iter = iter(self.functions)
+        functions_iter = _iter_with_previous(self.functions)
 
-        def loop(in_except, prev_func):
-            for function in functions_iter:
-                if _return_after is not None and prev_func is not None:
+        def loop(in_except):
+            for function, prev_func in functions_iter:
+                if _return_after is not None and prev_func is not _NO_PREVIOUS:
                     if prev_func.__name__ == _return_after:
                         break
                 try:
@@ -316,22 +325,21 @@ class Algorithm(object):
                             # exception is cleared, return to normal flow
                             if PYTHON_2:
                                 sys.exc_clear()
-                            return function
+                            return
                 except:
                     if _raise_immediately:
                         raise
                     state['exception'] = sys.exc_info()[1]
-                    function = loop(True, function)
+                    loop(True)
                     if in_except:
                         # an exception occurred while we were handling another
                         # exception, but now it's been cleared, so we return to
                         # the normal flow
-                        return function
-                prev_func = function
+                        return
             if in_except:
                 raise  # exception hasn't been handled, reraise
 
-        loop(False, None)
+        loop(False)
 
         return state
 
