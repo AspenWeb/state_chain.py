@@ -296,9 +296,9 @@ class Algorithm(object):
                                     sys.exc_clear()
                         state.update(new_state)
             except:
-                state['exception'] = sys.exc_info()[1]
                 if _raise_immediately:
                     raise
+                state['exception'] = sys.exc_info()[1]
 
             if _return_after is not None and function_name == _return_after:
                 break
