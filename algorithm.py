@@ -9,7 +9,7 @@ Installation
     $ pip install algorithm
 
 We `test <https://travis-ci.org/AspenWeb/algorithm.py>`_ against
-Python 2.6, 2.7, 3.2, and 3.3.
+Python 2.6, 2.7, 3.3, 3.4, and 3.5.
 
 :py:mod:`algorithm` is MIT-licensed.
 
