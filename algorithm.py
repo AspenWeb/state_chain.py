@@ -9,7 +9,7 @@ Installation
     $ pip install algorithm
 
 We `test <https://travis-ci.org/AspenWeb/algorithm.py>`_ against
-Python 2.6, 2.7, 3.2, and 3.3.
+Python 2.6, 2.7, 3.3, 3.4, and 3.5.
 
 :py:mod:`algorithm` is MIT-licensed.
 
@@ -487,7 +487,7 @@ class Algorithm(object):
         For this specific module, the code above is equivalent to:
         
         >>> from blah_algorithm import foo, bar, bloo
-        >>> Algorithm(foo, bar, bloo)
+        >>> blah = Algorithm(foo, bar, bloo)
 
         """
         module = cls._load_module_from_dotted_name(dotted_name)
@@ -610,7 +610,7 @@ class Algorithm(object):
             lineno = func.__code__.co_firstlineno
             functions_with_lineno.append((lineno, func))
         functions_with_lineno.sort()
-        return [func for lineno, func in functions_with_lineno]
+        return [f for i, f in functions_with_lineno]
 
 
 # Debugging Helpers
@@ -819,4 +819,5 @@ def debug(function):
 
 if __name__ == '__main__':
     import doctest
-    doctest.testmod()
+    import sys
+    sys.exit(min(doctest.testmod()[0], 1))
