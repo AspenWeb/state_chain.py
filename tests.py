@@ -4,7 +4,7 @@ import sys
 
 import traceback
 from pytest import raises, yield_fixture
-from algorithm import Algorithm, FunctionNotFound, PYTHON_2
+from algorithm import Algorithm, FunctionNotFound
 from filesystem_tree import FilesystemTree
 
 
@@ -132,6 +132,24 @@ def test_exception_fast_forwards(sys_path):
     state = foo_algorithm.run()
     assert state == {'val': 666, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
 
+def assert_false():
+    assert False
+
+def clear_exception(state, exception):
+    state['exception'] = None
+
+def dont_call_me(exception):
+    raise Exception("I said don't call me!")
+
+def test_exception_handlers_are_skipped_when_there_is_no_exception(sys_path):
+    Algorithm(dont_call_me, assert_false, clear_exception, dont_call_me).run()
+
+def test_exc_info_is_available_during_exception_handling(sys_path):
+    def check_exc_info(exception):
+        assert sys.exc_info()[1] is exception
+        return {'exception': None}
+    Algorithm(assert_false, check_exc_info).run()
+
 def test_exception_raises_if_uncleared(sys_path):
     sys_path.mk(EXCEPT)
     foo_algorithm = Algorithm.from_dotted_name('foo')
@@ -146,11 +164,10 @@ def test_traceback_for_uncleared_exception_reaches_back_to_original_raise(sys_pa
         foo_algorithm.run()
     except:
         tb = traceback.format_exc()
-
-    # We get an extra frame under Python 3, but what we don't want is not
-    # enough frames.
-
-    assert len(tb.splitlines()) == (8 if PYTHON_2 else 10)
+    lines = tb.splitlines()
+    assert lines[-1][:11] == 'NameError: '
+    assert "'heck'" in lines[-1]
+    assert len(lines) == 12, tb
 
 def test_function_can_have_default_value_for_exception_to_be_always_called(sys_path):
     sys_path.mk(EXCEPT)

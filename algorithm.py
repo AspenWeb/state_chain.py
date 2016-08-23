@@ -182,6 +182,15 @@ class FunctionNotFound(KeyError):
         return "The function '{0}' isn't in this algorithm.".format(*self.args)
 
 
+_NO_PREVIOUS = object()
+
+def _iter_with_previous(iterable):
+    prev = _NO_PREVIOUS
+    for o in iterable:
+        yield o, prev
+        prev = o
+
+
 class Algorithm(object):
     """Model an algorithm as a list of functions.
 
@@ -257,6 +266,10 @@ class Algorithm(object):
            (under Python 3 exceptions are cleared automatically at the end of
            except blocks).
 
+         - If an exception is raised by a function handling another exception,
+           then ``exception`` is set to the new one and we look for the next
+           exception handler.
+
          - If ``exception`` is not ``None`` after all functions have been run,
            then we re-raise it.
 
@@ -264,6 +277,11 @@ class Algorithm(object):
            per-call ``_raise_immediately`` and then at the instance default),
            then we re-raise any exception immediately instead of
            fast-forwarding to the next exception handler.
+
+         - When an exception occurs, the functions that accept an ``exception``
+           argument will be called from inside the ``except:`` block, so you
+           can access ``sys.exc_info`` (which contains the traceback) even
+           under Python 3.
 
         """
 
@@ -278,50 +296,50 @@ class Algorithm(object):
         if 'state' not in state:        state['state'] = state
         if 'exception' not in state:    state['exception'] = None
 
-        for function in self.functions:
-            function_name = function.__name__
-            try:
-                deps = resolve_dependencies(function, state)
-                have_exception = state['exception'] is not None
-                if 'exception' in deps.signature.required and not have_exception:
-                    pass    # Function wants exception but we don't have it.
-                elif 'exception' not in deps.signature.parameters and have_exception:
-                    pass    # Function doesn't want exception but we have it.
-                else:
-                    new_state = function(**deps.as_kwargs)
-                    if new_state is not None:
-                        if PYTHON_2:
-                            if 'exception' in new_state:
-                                if new_state['exception'] is None:
-                                    sys.exc_clear()
-                        state.update(new_state)
-            except:
-                ExceptionClass, exception = sys.exc_info()[:2]
-                state['exception'] = exception
-                if _raise_immediately:
-                    raise
+        # The `for` loop in the `loop()` function below can be entered multiple
+        # times since that function calls itself when an exception is raised.
+        # If we looped over the `functions` list we'd be starting from the top
+        # at each exception, and that's not what we want, so we use an iterator
+        # instead to keep track of where we are in the algorithm.
+        functions_iter = _iter_with_previous(self.functions)
 
-            if _return_after is not None and function_name == _return_after:
-                break
+        def loop(in_except):
+            for function, prev_func in functions_iter:
+                if _return_after is not None and prev_func is not _NO_PREVIOUS:
+                    if prev_func.__name__ == _return_after:
+                        break
+                try:
+                    deps = resolve_dependencies(function, state)
+                    skip = (
+                        # When function wants exception but we don't have it.
+                        not in_except and 'exception' in deps.signature.required
+                        or
+                        # When function doesn't want exception but we have it.
+                        in_except and 'exception' not in deps.signature.parameters
+                    )
+                    if not skip:
+                        new_state = function(**deps.as_kwargs)
+                        if new_state is not None:
+                            state.update(new_state)
+                        if in_except and state['exception'] is None:
+                            # exception is cleared, return to normal flow
+                            if PYTHON_2:
+                                sys.exc_clear()
+                            return
+                except:
+                    if _raise_immediately:
+                        raise
+                    state['exception'] = sys.exc_info()[1]
+                    loop(True)
+                    if in_except:
+                        # an exception occurred while we were handling another
+                        # exception, but now it's been cleared, so we return to
+                        # the normal flow
+                        return
+            if in_except:
+                raise  # exception hasn't been handled, reraise
 
-        if state['exception'] is not None:
-            if PYTHON_2:
-
-                # Under Python 2, raising state['exception'] means the
-                # traceback stops at this reraise. We want the traceback to go
-                # back to where the exception was first raised, and a naked
-                # raise will reraise the current exception.
-
-                raise
-
-            else:
-
-                # Under Python 3, exceptions are cleared at the end of the
-                # except block, meaning we have no current exception to reraise
-                # here. Thankfully, the traceback off this reraise will show
-                # back to the original exception.
-
-                raise state['exception']
+        loop(False)
 
         return state
 
