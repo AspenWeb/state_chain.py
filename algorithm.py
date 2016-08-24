@@ -161,7 +161,7 @@ import types
 from dependency_injection import resolve_dependencies
 
 
-__version__ = '1.2.0'
+__version__ = '1.2.0-dev'
 PYTHON_2 = sys.version_info < (3, 0, 0)
 
 
