@@ -1,7 +1,11 @@
 language: python
-python: 3.5
-install: pip install tox
-script: tox
+python:
+  - 2.7
+  - 3.4
+  - 3.5
+before_script:
+  - pip install filesystem_tree pyflakes pytest>=2.4 .
+script: ./runtests.sh
 notifications:
   email: false
 branches:

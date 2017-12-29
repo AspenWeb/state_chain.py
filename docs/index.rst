@@ -1,7 +1,7 @@
-algorithm.py
-============
+state_chain.py
+==============
 
-.. automodule:: algorithm 
+.. automodule:: state_chain
     :members:
     :member-order: bysource
     :special-members:
