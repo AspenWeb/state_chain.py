@@ -1,4 +1,4 @@
-"""Model algorithms as a list of functions operating on s ahared state dict.
+"""Model algorithms as a list of functions operating on a shared state dict.
 
 
 Installation
