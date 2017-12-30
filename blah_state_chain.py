@@ -1,4 +1,4 @@
-# This is a support file for the doctest tutorial in algorithm.py.
+# This is a support file for the doctest tutorial in state_chain.py.
 
 def foo():
     return {'baz': 1}

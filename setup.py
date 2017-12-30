@@ -3,13 +3,13 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 from setuptools import setup
 
 
-setup( name='algorithm'
+setup( name='state_chain'
      , author='Chad Whitacre et al.'
      , author_email='team@aspen.io'
-     , description="Model an algorithm as a list of functions."
-     , url='http://algorithm-py.readthedocs.org/'
+     , description="Model algorithms as a list of functions operating on a shared state dict."
+     , url='https://state-chain-py.readthedocs.io/'
      , version='1.2.0-dev'
-     , py_modules=['algorithm']
+     , py_modules=['state_chain']
      , install_requires=['dependency_injection']
      , classifiers=[ 'Development Status :: 5 - Production/Stable'
                    , 'Intended Audience :: Developers'

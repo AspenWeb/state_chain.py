@@ -1,21 +1,22 @@
-"""Model an algorithm as a list of functions.
+"""Model algorithms as a list of functions operating on a shared state dict.
 
 
 Installation
 ------------
 
-:py:mod:`algorithm` is available on `GitHub`_ and on `PyPI`_::
+:py:mod:`state_chain` is available on `GitHub`_ and on `PyPI`_::
 
-    $ pip install algorithm
+    $ pip install state_chain
 
-We `test <https://travis-ci.org/AspenWeb/algorithm.py>`_ against
-Python 2.6, 2.7, 3.3, 3.4, and 3.5.
+The version of :py:mod:`state_chain` documented here has been `tested`_ against
+Python 2.7, 3.4, and 3.5 on Ubuntu.
 
-:py:mod:`algorithm` is MIT-licensed.
+:py:mod:`state_chain` is MIT-licensed.
 
 
-.. _GitHub: https://github.com/AspenWeb/algorithm.py
-.. _PyPI: https://pypi.python.org/pypi/algorithm
+.. _GitHub: https://github.com/AspenWeb/state_chain.py
+.. _PyPI: https://pypi.python.org/pypi/state_chain
+.. _tested: https://travis-ci.org/AspenWeb/state_chain.py
 
 
 Tutorial
@@ -42,10 +43,10 @@ To get started, define some functions:
 Each function returns a :py:class:`dict`, which is used to update the state of
 the current run of the algorithm. Names from the state dictionary are made
 available to downstream functions via :py:mod:`dependency_injection`. Now
-make an :py:class:`Algorithm` object:
+make an :py:class:`StateChain` object:
 
-    >>> from algorithm import Algorithm
-    >>> blah = Algorithm(foo, bar, bloo)
+    >>> from state_chain import StateChain
+    >>> blah = StateChain(foo, bar, bloo)
 
 
 The functions you passed to the constructor are loaded into a list:
@@ -54,7 +55,7 @@ The functions you passed to the constructor are loaded into a list:
     [<function foo ...>, <function bar ...>, <function bloo ...>]
 
 
-Now you can use :py:func:`~Algorithm.run` to run the algorithm. You'll get back
+Now you can use :py:func:`~StateChain.run` to run the functions. You'll get back
 a dictionary representing the algorithm's final state:
 
     >>> state = blah.run()
@@ -64,10 +65,10 @@ a dictionary representing the algorithm's final state:
 Okay!
 
 
-Modifying an Algorithm
-++++++++++++++++++++++
+Modifying a State Chain
++++++++++++++++++++++++
 
-Let's add two functions to the algorithm. First let's define the functions:
+Let's add two functions to the state chain. First let's define the functions:
 
     >>> def uh_oh(baz):
     ...     if baz == 2:
@@ -79,8 +80,8 @@ Let's add two functions to the algorithm. First let's define the functions:
     ...
 
 
-Now let's interpolate them into our algorithm. Let's put the ``uh_oh`` function between
-``bar`` and ``bloo``:
+Now let's interpolate them into our state chain. Let's put the ``uh_oh``
+function between ``bar`` and ``bloo``:
 
     >>> blah.insert_before('bloo', uh_oh)
     >>> blah.functions      #doctest: +ELLIPSIS
@@ -101,12 +102,12 @@ Just for kicks, let's remove the ``foo`` function while we're at it:
     [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
 
 
-If you're making extensive changes to an algorithm, you should feel free to
+If you're making extensive changes to a state chain, you should feel free to
 directly manipulate the list of functions, rather than using the more
-cumbersome :py:meth:`~algorithm.Algorithm.insert_before`,
-:py:meth:`~algorithm.Algorithm.insert_after`, and
-:py:meth:`~algorithm.Algorithm.remove` methods. We could have achieved the same
-result like so:
+cumbersome :py:meth:`~state_chain.StateChain.insert_before`,
+:py:meth:`~state_chain.StateChain.insert_after`, and
+:py:meth:`~state_chain.StateChain.remove` methods. We could have achieved the
+same result like so:
 
     >>> blah.functions = [ blah['bar']
     ...                  , uh_oh
@@ -119,7 +120,7 @@ result like so:
 
 Either way, what happens when we run it? Since we no longer have the ``foo``
 function providing a value for ``bar``, we'll need to supply that using a
-keyword argument to :py:func:`~Algorithm.run`:
+keyword argument to :py:func:`~StateChain.run`:
 
     >>> state = blah.run(baz=2)
     I am dealing with it!
@@ -129,12 +130,12 @@ Exception Handling
 ++++++++++++++++++
 
 Whenever a function raises an exception, like ``uh_oh`` did in the example
-above, :py:class:`~Algorithm.run` captures the exception and populates an
-``exception`` key in the current algorithm run state dictionary. While
-``exception`` is not ``None``, any normal function is skipped, and only
-functions that ask for ``exception`` get called. It's like a fast-forward. So
-in our example ``deal_with_it`` got called, but ``bloo`` didn't, which is why
-there is no ``sum``:
+above, :py:class:`~StateChain.run` captures the exception and populates an
+``exception`` key in the current run's state dictionary. While ``exception`` is
+not ``None``, any normal function is skipped, and only functions that ask for
+``exception`` get called. It's like a fast-forward. So in our example
+``deal_with_it`` got called, but ``bloo`` didn't, which is why there is no
+``sum``:
 
     >>> 'sum' in state
     False
@@ -175,11 +176,11 @@ else:
 
 
 class FunctionNotFound(KeyError):
-    """Used when a function is not found in an algorithm function list (subclasses
-    :py:exc:`KeyError`).
+    """Used when a function is not found in a state_chain function list
+    (subclasses :py:exc:`KeyError`).
     """
     def __str__(self):
-        return "The function '{0}' isn't in this algorithm.".format(*self.args)
+        return "The function '{0}' isn't in this state chain.".format(*self.args)
 
 
 _NO_PREVIOUS = object()
@@ -191,19 +192,21 @@ def _iter_with_previous(iterable):
         prev = o
 
 
-class Algorithm(object):
-    """Model an algorithm as a list of functions.
+class StateChain(object):
+    """Model an algorithm as a list of functions operating on a shared state
+    dictionary.
 
     :param functions: a sequence of functions in the order they are to be run
     :param bool raise_immediately: Whether to re-raise exceptions immediately.
         :py:class:`False` by default, this can only be set as a keyword argument
 
-    Each function in your algorithm must return a mapping or :py:class:`None`.
+    Each function in the state chain must return a mapping or :py:class:`None`.
     If it returns a mapping, the mapping will be used to update a state
-    dictionary for the current run of the algorithm. Functions in the algorithm
-    can use any name from the current state dictionary as a parameter, and the
-    value will then be supplied dynamically via :py:mod:`dependency_injection`.
-    See the :py:func:`run` method for details on exception handling.
+    dictionary for the current run of the algorithm. Functions in the state
+    chain can use any name from the current state dictionary as a parameter,
+    and the value will then be supplied dynamically via
+    :py:mod:`dependency_injection`.  See the :py:func:`run` method for details
+    on exception handling.
 
     """
 
@@ -233,17 +236,17 @@ class Algorithm(object):
             with this name
 
         :param dict state: remaining keyword arguments are used for the initial
-            state dictionary for this run of the algorithm
+            state dictionary for this run of the state chain
 
         :raises: :py:exc:`FunctionNotFound`, if there is no function named
             ``_return_after``
 
-        :returns: a dictionary representing the final algorithm state
+        :returns: a dictionary representing the final state
 
         The state dictionary is initialized with three items (their default
         values can be overriden using keyword arguments to :py:func:`run`):
 
-         - ``algorithm`` - a reference to the parent :py:class:`Algorithm` instance
+         - ``chain`` - a reference to the parent :py:class:`StateChain` instance
          - ``state`` - a circular reference to the state dictionary
          - ``exception`` - ``None``
 
@@ -292,7 +295,7 @@ class Algorithm(object):
             if _return_after not in self.get_names():
                 raise FunctionNotFound(_return_after)
 
-        if 'algorithm' not in state:    state['algorithm'] = self
+        if 'chain' not in state:        state['chain'] = self
         if 'state' not in state:        state['state'] = state
         if 'exception' not in state:    state['exception'] = None
 
@@ -300,7 +303,7 @@ class Algorithm(object):
         # times since that function calls itself when an exception is raised.
         # If we looped over the `functions` list we'd be starting from the top
         # at each exception, and that's not what we want, so we use an iterator
-        # instead to keep track of where we are in the algorithm.
+        # instead to keep track of where we are in the state chain.
         functions_iter = _iter_with_previous(self.functions)
 
         def loop(in_except):
@@ -349,13 +352,13 @@ class Algorithm(object):
         :py:exc:`FunctionNotFound`.
 
         >>> def foo(): pass
-        >>> algo = Algorithm(foo)
+        >>> algo = StateChain(foo)
         >>> algo['foo'] is foo
         True
         >>> algo['bar']
         Traceback (most recent call last):
           ...
-        FunctionNotFound: The function 'bar' isn't in this algorithm.
+        FunctionNotFound: The function 'bar' isn't in this state chain.
 
         """
         func = None
@@ -379,7 +382,7 @@ class Algorithm(object):
         ``name``, or raise :py:exc:`FunctionNotFound`.
 
         >>> def foo(): pass
-        >>> algo = Algorithm(foo)
+        >>> algo = StateChain(foo)
         >>> def bar(): pass
         >>> algo.insert_before('foo', bar)
         >>> algo.get_names()
@@ -389,11 +392,11 @@ class Algorithm(object):
         >>> algo.get_names()
         ['bar', 'baz', 'foo']
         >>> def bal(): pass
-        >>> algo.insert_before(Algorithm.START, bal)
+        >>> algo.insert_before(StateChain.START, bal)
         >>> algo.get_names()
         ['bal', 'bar', 'baz', 'foo']
         >>> def bah(): pass
-        >>> algo.insert_before(Algorithm.END, bah)
+        >>> algo.insert_before(StateChain.END, bah)
         >>> algo.get_names()
         ['bal', 'bar', 'baz', 'foo', 'bah']
 
@@ -413,7 +416,7 @@ class Algorithm(object):
         ``name``, or raise :py:exc:`FunctionNotFound`.
 
         >>> def foo(): pass
-        >>> algo = Algorithm(foo)
+        >>> algo = StateChain(foo)
         >>> def bar(): pass
         >>> algo.insert_after('foo', bar)
         >>> algo.get_names()
@@ -423,11 +426,11 @@ class Algorithm(object):
         >>> algo.get_names()
         ['foo', 'bar', 'baz']
         >>> def bal(): pass
-        >>> algo.insert_after(Algorithm.START, bal)
+        >>> algo.insert_after(StateChain.START, bal)
         >>> algo.get_names()
         ['bal', 'foo', 'bar', 'baz']
         >>> def bah(): pass
-        >>> algo.insert_before(Algorithm.END, bah)
+        >>> algo.insert_before(StateChain.END, bah)
         >>> algo.get_names()
         ['bal', 'foo', 'bar', 'baz', 'bah']
 
@@ -455,13 +458,13 @@ class Algorithm(object):
         """Construct a new instance from functions defined in a Python module.
 
         :param dotted_name: the dotted name of a Python module that contains
-            functions that will be added to algorithm in the order of appearance.
+            functions that will be added to a state chain in the order of appearance.
 
         :param kw: keyword arguments are passed through to the default constructor
 
-        This is a convenience constructor to instantiate an algorithm based on
+        This is a convenience constructor to instantiate a state chain based on
         functions defined in a regular Python file. For example, create a file named
-        ``blah_algorithm.py`` on your ``PYTHONPATH``::
+        ``blah_state_chain.py`` on your ``PYTHONPATH``::
 
             def foo():
                 return {'baz': 1}
@@ -475,7 +478,7 @@ class Algorithm(object):
 
         Then pass the dotted name of the file to this constructor:
 
-        >>> blah = Algorithm.from_dotted_name('blah_algorithm')
+        >>> blah = StateChain.from_dotted_name('blah_state_chain')
 
         All functions defined in the file whose name doesn't begin with ``_``
         are loaded into a list in the order they're defined in the file, and
@@ -483,11 +486,11 @@ class Algorithm(object):
 
         >>> blah.functions #doctest: +ELLIPSIS
         [<function foo ...>, <function bar ...>, <function bloo ...>]
-        
+
         For this specific module, the code above is equivalent to:
-        
-        >>> from blah_algorithm import foo, bar, bloo
-        >>> blah = Algorithm(foo, bar, bloo)
+
+        >>> from blah_state_chain import foo, bar, bloo
+        >>> blah = StateChain(foo, bar, bloo)
 
         """
         module = cls._load_module_from_dotted_name(dotted_name)
@@ -501,17 +504,17 @@ class Algorithm(object):
 
         :param function function: a function object
 
-        This method wraps the module-level function :py:func:`algorithm.debug`,
-        adding three conveniences.
+        This method wraps the module-level function
+        :py:func:`state_chain.debug`, adding three conveniences.
 
         First, calling this method not only returns a copy of the function with
         a breakpoint installed, it actually replaces the old function in the
-        algorithm with the copy. So you can do:
+        state chain with the copy. So you can do:
 
         >>> def foo():
         ...     pass
         ...
-        >>> algo = Algorithm(foo)
+        >>> algo = StateChain(foo)
         >>> algo.debug(foo)             #doctest: +ELLIPSIS
         <function foo at ...>
         >>> algo.run()                  #doctest: +SKIP
@@ -520,7 +523,7 @@ class Algorithm(object):
         Second, it provides a method on itself to install via function name
         instead of function object:
 
-        >>> algo = Algorithm(foo)
+        >>> algo = StateChain(foo)
         >>> algo.debug.by_name('foo')   #doctest: +ELLIPSIS
         <function foo at ...>
         >>> algo.run()                  #doctest: +SKIP
@@ -529,14 +532,14 @@ class Algorithm(object):
         Third, it aliases the :py:meth:`~DebugMethod.by_name` method as
         :py:meth:`~_DebugMethod.__getitem__` so you can use mapping access as well:
 
-        >>> algo = Algorithm(foo)
+        >>> algo = StateChain(foo)
         >>> algo.debug['foo']           #doctest: +ELLIPSIS
         <function foo at ...>
         >>> algo.run()                  #doctest: +SKIP
         (Pdb)
 
         Why would you want to do that? Well, let's say you've written a library
-        that includes an algorithm:
+        that includes a state chain:
 
         >>> def foo(): pass
         ...
@@ -544,7 +547,7 @@ class Algorithm(object):
         ...
         >>> def baz(): pass
         ...
-        >>> blah = Algorithm(foo, bar, baz)
+        >>> blah = StateChain(foo, bar, baz)
 
         And now some user of your library ends up rebuilding the functions list
         using some of the original functions and some of their own:
@@ -572,7 +575,7 @@ class Algorithm(object):
         ...                  , blah['baz']
         ...                   ]
 
-        Now when they run the algorithm they'll hit a pdb breakpoint just
+        Now when they run the state chain they'll hit a pdb breakpoint just
         inside your ``bar`` function:
 
         >>> blah.run()              #doctest: +SKIP
@@ -617,20 +620,20 @@ class Algorithm(object):
 # =================
 
 class _DebugMethod(object):
-    # See docstring at Algorithm.debug.
+    # See docstring at StateChain.debug.
 
-    def __init__(self, algorithm):
-        self.algorithm = algorithm
+    def __init__(self, chain):
+        self.chain = chain
 
     def __call__(self, function):
         debugging_function = debug(function)
-        for i, candidate in enumerate(self.algorithm.functions):
+        for i, candidate in enumerate(self.chain.functions):
             if candidate is function:
-                self.algorithm.functions[i] = debugging_function
+                self.chain.functions[i] = debugging_function
         return debugging_function
 
     def by_name(self, name):
-        return self(self.algorithm[name])
+        return self(self.chain[name])
 
     __getitem__ = by_name
 
@@ -652,8 +655,8 @@ def debug(function):
     function call and then step into the function. No: this helper is only
     useful when you've got a function object that you want to debug, and you
     have neither the definition nor the call conveniently at hand. See the
-    method :py:meth:`Algorithm.debug` for an explanation of how this situation
-    arises with the :py:mod:`algorithm` module.
+    method :py:meth:`StateChain.debug` for an explanation of how this situation
+    arises with the :py:mod:`state_chain` module.
 
     For our purposes here, it's enough to know that you can wrap any function:
 

@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import sys
 
 import traceback
 from pytest import raises, yield_fixture
-from algorithm import Algorithm, FunctionNotFound
+from state_chain import StateChain, FunctionNotFound
 from filesystem_tree import FilesystemTree
 
 
@@ -41,23 +42,22 @@ def buz(): return {'val': 3}
 # tests
 # =====
 
-def test_Algorithm_can_be_instantiated():
+def test_StateChain_can_be_instantiated():
     def foo(): pass
-    foo_algorithm = Algorithm(foo)
-    assert foo_algorithm.functions == [foo]
+    assert StateChain(foo).functions == [foo]
 
-def test_Algorithm_can_be_instantiated_with_from_dotted_name(sys_path):
+def test_StateChain_can_be_instantiated_with_from_dotted_name(sys_path):
     sys_path.mk(('foo/__init__.py', ''), ('foo/bar.py', 'def baz(): pass'))
-    foo_algorithm = Algorithm.from_dotted_name('foo.bar')
+    chain = StateChain.from_dotted_name('foo.bar')
     from foo.bar import baz
-    assert foo_algorithm.functions == [baz]
+    assert chain.functions == [baz]
 
-def test_Algorithm_cant_be_instantiated_with_a_string():
-    actual = raises(TypeError, Algorithm, 'foo.bar').value
+def test_StateChain_cant_be_instantiated_with_a_string():
+    actual = raises(TypeError, StateChain, 'foo.bar').value
     u = 'u' if sys.version_info < (3,) else ''
     assert str(actual) == "Not a function: {0}'foo.bar'".format(u)
 
-def test_Algorithm_includes_imported_functions_and_the_order_is_screwy(sys_path):
+def test_StateChain_includes_imported_functions_and_the_order_is_screwy(sys_path):
     sys_path.mk( ('um.py', 'def um(): pass')
                , ('foo/__init__.py', '')
                , ('foo/bar.py', '''
@@ -65,11 +65,11 @@ def baz(): pass
 from um import um
 def blah(): pass
 '''))
-    foo_algorithm = Algorithm.from_dotted_name('foo.bar')
+    chain = StateChain.from_dotted_name('foo.bar')
     import foo.bar, um
-    assert foo_algorithm.functions == [um.um, foo.bar.baz, foo.bar.blah]
+    assert chain.functions == [um.um, foo.bar.baz, foo.bar.blah]
 
-def test_Algorithm_ignores_functions_starting_with_underscore(sys_path):
+def test_StateChain_ignores_functions_starting_with_underscore(sys_path):
     sys_path.mk( ('um.py', 'def um(): pass')
                , ('foo/__init__.py', '')
                , ('foo/bar.py', '''
@@ -77,37 +77,37 @@ def baz(): pass
 from um import um as _um
 def blah(): pass
 '''))
-    foo_algorithm = Algorithm.from_dotted_name('foo.bar')
+    chain = StateChain.from_dotted_name('foo.bar')
     import foo.bar
-    assert foo_algorithm.functions == [foo.bar.baz, foo.bar.blah]
+    assert chain.functions == [foo.bar.baz, foo.bar.blah]
 
-def test_can_run_through_algorithm(sys_path):
+def test_can_run_through_state_chain(sys_path):
     sys_path.mk(FOO_PY)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
-    state = foo_algorithm.run(val=None)
-    assert state == {'val': 3, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
+    chain = StateChain.from_dotted_name('foo')
+    state = chain.run(val=None)
+    assert state == {'val': 3, 'exception': None, 'state': state, 'chain': chain}
 
-def test_can_stop_algorithm_after_a_certain_point(sys_path):
+def test_can_stop_state_chain_after_a_certain_point(sys_path):
     sys_path.mk(FOO_PY)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
-    state = foo_algorithm.run(val=None, _return_after='baz')
-    assert state == {'val': 2, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
+    chain = StateChain.from_dotted_name('foo')
+    state = chain.run(val=None, _return_after='baz')
+    assert state == {'val': 2, 'exception': None, 'state': state, 'chain': chain}
 
 def test_error_raised_if_we_try_to_return_after_an_unknown_function(sys_path):
     sys_path.mk(FOO_PY)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
-    raises(FunctionNotFound, foo_algorithm.run, val=None, _return_after='blaaaaaah')
+    chain = StateChain.from_dotted_name('foo')
+    raises(FunctionNotFound, chain.run, val=None, _return_after='blaaaaaah')
 
-def test_inserted_algorithm_steps_run(sys_path):
+def test_inserted_state_chain_steps_run(sys_path):
     sys_path.mk(FOO_PY)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
+    chain = StateChain.from_dotted_name('foo')
 
     def biz(): return {'val': 4}
 
-    foo_algorithm.insert_after('buz', biz)
-    state = foo_algorithm.run(val=None)
+    chain.insert_after('buz', biz)
+    state = chain.run(val=None)
 
-    assert state == {'val': 4, 'exception': None, 'state': state, 'algorithm':foo_algorithm}
+    assert state == {'val': 4, 'exception': None, 'state': state, 'chain': chain}
 
 
 # Exception Handling
@@ -128,9 +128,9 @@ EXCEPT = ('foo.py', '''
 
 def test_exception_fast_forwards(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
-    state = foo_algorithm.run()
-    assert state == {'val': 666, 'exception': None, 'state': state, 'algorithm': foo_algorithm}
+    chain = StateChain.from_dotted_name('foo')
+    state = chain.run()
+    assert state == {'val': 666, 'exception': None, 'state': state, 'chain': chain}
 
 def assert_false():
     assert False
@@ -142,26 +142,26 @@ def dont_call_me(exception):
     raise Exception("I said don't call me!")
 
 def test_exception_handlers_are_skipped_when_there_is_no_exception(sys_path):
-    Algorithm(dont_call_me, assert_false, clear_exception, dont_call_me).run()
+    StateChain(dont_call_me, assert_false, clear_exception, dont_call_me).run()
 
 def test_exc_info_is_available_during_exception_handling(sys_path):
     def check_exc_info(exception):
         assert sys.exc_info()[1] is exception
         return {'exception': None}
-    Algorithm(assert_false, check_exc_info).run()
+    StateChain(assert_false, check_exc_info).run()
 
 def test_exception_raises_if_uncleared(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
-    foo_algorithm.remove('clear')
-    raises(NameError, foo_algorithm.run)
+    chain = StateChain.from_dotted_name('foo')
+    chain.remove('clear')
+    raises(NameError, chain.run)
 
 def test_traceback_for_uncleared_exception_reaches_back_to_original_raise(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
-    foo_algorithm.remove('clear')
+    chain = StateChain.from_dotted_name('foo')
+    chain.remove('clear')
     try:
-        foo_algorithm.run()
+        chain.run()
     except:
         tb = traceback.format_exc()
     lines = tb.splitlines()
@@ -171,34 +171,34 @@ def test_traceback_for_uncleared_exception_reaches_back_to_original_raise(sys_pa
 
 def test_function_can_have_default_value_for_exception_to_be_always_called(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
+    chain = StateChain.from_dotted_name('foo')
 
     # Add a both-handling function.
     def both(exception=None):
         return {'exception': None, 'um': 'yeah'}
-    foo_algorithm.insert_before('clear', both)
+    chain.insert_before('clear', both)
 
     # Exception case.
-    assert foo_algorithm.run()['um'] == 'yeah'
+    assert chain.run()['um'] == 'yeah'
 
     # Non-exception case.
-    foo_algorithm.remove('bar')
-    assert foo_algorithm.run()['um'] == 'yeah'
+    chain.remove('bar')
+    assert chain.run()['um'] == 'yeah'
 
 def test_exception_raises_immediately_if_told_to_via_constructor(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo', raise_immediately=True)
-    foo_algorithm.remove('clear')
-    raises(NameError, foo_algorithm.run)
+    chain = StateChain.from_dotted_name('foo', raise_immediately=True)
+    chain.remove('clear')
+    raises(NameError, chain.run)
 
 def test_exception_raises_immediately_if_told_to_via_run_call(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo')
-    foo_algorithm.remove('clear')
-    raises(NameError, foo_algorithm.run, _raise_immediately=True)
+    chain = StateChain.from_dotted_name('foo')
+    chain.remove('clear')
+    raises(NameError, chain.run, _raise_immediately=True)
 
 def test_per_call_trumps_constructor_for_raise_immediately(sys_path):
     sys_path.mk(EXCEPT)
-    foo_algorithm = Algorithm.from_dotted_name('foo', raise_immediately=True)
-    foo_algorithm.remove('clear')
-    raises(NameError, foo_algorithm.run, _raise_immediately=False)
+    chain = StateChain.from_dotted_name('foo', raise_immediately=True)
+    chain.remove('clear')
+    raises(NameError, chain.run, _raise_immediately=False)

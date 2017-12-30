@@ -1,1 +1,1 @@
-http://algorithm-py.rtfd.org/
+https://state-chain-py.readthedocs.io/

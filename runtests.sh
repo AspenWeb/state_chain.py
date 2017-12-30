@@ -1,4 +1,4 @@
 #!/bin/sh -eu
-python algorithm.py  # doctests
+python state_chain.py  # doctests
 py.test -v tests.py
-pyflakes algorithm.py tests.py
+pyflakes state_chain.py tests.py
