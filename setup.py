@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 from setuptools import setup
 
 
-setup( name='state_chain.py'
+setup( name='state_chain'
      , author='Chad Whitacre et al.'
      , author_email='team@aspen.io'
      , description="Model algorithms as a list of functions operating on a shared state dict."
