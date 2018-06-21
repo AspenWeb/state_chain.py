@@ -10,7 +10,7 @@ setup( name='state_chain'
      , url='https://state-chain-py.readthedocs.io/'
      , version='1.2.0-dev'
      , py_modules=['state_chain']
-     , install_requires=['dependency_injection']
+     , install_requires=['dependency_injection >= 1.2.0']
      , classifiers=[ 'Development Status :: 5 - Production/Stable'
                    , 'Intended Audience :: Developers'
                    , 'License :: OSI Approved :: MIT License'

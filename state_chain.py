@@ -159,7 +159,7 @@ import opcode
 import sys
 import types
 
-from dependency_injection import resolve_dependencies
+from dependency_injection import get_signature, resolve_dependencies
 
 
 __version__ = '1.2.0-dev'
@@ -223,6 +223,7 @@ class StateChain(object):
             if not isinstance(functions[0], collections.Callable):
                 raise TypeError("Not a function: {0}".format(repr(functions[0])))
         self.functions = list(functions)
+        self._signatures = {}
         self.debug = _DebugMethod(self)
 
 
@@ -307,12 +308,15 @@ class StateChain(object):
         functions_iter = _iter_with_previous(self.functions)
 
         def loop(in_except):
+            signatures = self._signatures
             for function, prev_func in functions_iter:
                 if _return_after is not None and prev_func is not _NO_PREVIOUS:
                     if prev_func.__name__ == _return_after:
                         break
                 try:
-                    deps = resolve_dependencies(function, state)
+                    if function not in signatures:
+                        signatures[function] = get_signature(function)
+                    deps = resolve_dependencies(signatures[function], state)
                     skip = (
                         # When function wants exception but we don't have it.
                         not in_except and 'exception' in deps.signature.required
