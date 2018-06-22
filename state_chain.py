@@ -162,7 +162,7 @@ import types
 from dependency_injection import get_signature, resolve_dependencies
 
 
-__version__ = '1.2.0-dev'
+__version__ = '1.3.0'
 PYTHON_2 = sys.version_info < (3, 0, 0)
 
 
