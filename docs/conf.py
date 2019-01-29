@@ -1,4 +1,4 @@
--*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 #
 # State-chain.py documentation build configuration file, created by
 # sphinx-quickstart on Tue Aug  6 21:07:46 2013.
