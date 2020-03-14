@@ -359,7 +359,7 @@ class StateChain(object):
         >>> algo['bar']
         Traceback (most recent call last):
           ...
-        FunctionNotFound: The function 'bar' isn't in this state chain.
+        state_chain.FunctionNotFound: The function 'bar' isn't in this state chain.
 
         """
         func = None
