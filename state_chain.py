@@ -209,9 +209,6 @@ class StateChain(object):
 
     """
 
-    functions = None        #: A list of functions comprising the algorithm.
-    default_raise_immediately = False
-
     START = -1
     END = -2
 
