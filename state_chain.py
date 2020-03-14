@@ -9,7 +9,7 @@ Installation
     $ pip install state_chain
 
 The version of :py:mod:`state_chain` documented here has been `tested`_ against
-Python 2.7, 3.6, 3.7 and 3.8 on Ubuntu.
+Python 3.6, 3.7 and 3.8 on Ubuntu.
 
 :py:mod:`state_chain` is MIT-licensed.
 
@@ -152,7 +152,6 @@ API Reference
 -------------
 
 """
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 import opcode
 import sys
@@ -162,16 +161,6 @@ from dependency_injection import get_signature, resolve_dependencies
 
 
 __version__ = '1.3.0-dev'
-PYTHON_2 = sys.version_info < (3, 0, 0)
-
-
-if PYTHON_2:
-    def exec_(some_python, namespace):
-        # Have to double-exec because the Python 2 form is SyntaxError in 3.
-        exec("exec some_python in namespace")
-else:
-    def exec_(some_python, namespace):
-        exec(some_python, namespace)
 
 
 class FunctionNotFound(KeyError):
@@ -191,7 +180,7 @@ def _iter_with_previous(iterable):
         prev = o
 
 
-class StateChain(object):
+class StateChain:
     """Model an algorithm as a list of functions operating on a shared state
     dictionary.
 
@@ -261,9 +250,7 @@ class StateChain(object):
            handled.
 
          - You should return ``{'exception': None}`` to reset exception
-           handling. Under Python 2 we will call ``sys.exc_clear`` for you
-           (under Python 3 exceptions are cleared automatically at the end of
-           except blocks).
+           handling.
 
          - If an exception is raised by a function handling another exception,
            then ``exception`` is set to the new one and we look for the next
@@ -279,8 +266,7 @@ class StateChain(object):
 
          - When an exception occurs, the functions that accept an ``exception``
            argument will be called from inside the ``except:`` block, so you
-           can access ``sys.exc_info`` (which contains the traceback) even
-           under Python 3.
+           can access ``sys.exc_info`` (which contains the traceback).
 
         """
 
@@ -325,8 +311,6 @@ class StateChain(object):
                             state.update(new_state)
                         if in_except and state['exception'] is None:
                             # exception is cleared, return to normal flow
-                            if PYTHON_2:
-                                sys.exc_clear()
                             return
                 except:
                     if _raise_immediately:
@@ -583,7 +567,7 @@ class StateChain(object):
     def _load_module_from_dotted_name(dotted_name):
         class RootModule(object): pass
         module = RootModule()  # let's us use getattr to traverse down
-        exec_('import {0}'.format(dotted_name), module.__dict__)
+        exec('import {0}'.format(dotted_name), module.__dict__)
         for name in dotted_name.split('.'):
             module = getattr(module, name)
         return module
@@ -686,22 +670,7 @@ def debug(function):
     new_code = b''
     addr_pad = 0
 
-    if PYTHON_2:
-        _chr = chr
-    else:
-
-        # In Python 3 chr returns a str (== 2's unicode), not a bytes (== 2's
-        # str). However, the func_new constructor wants a bytes for both code
-        # and lnotab. We use latin-1 to encode these to bytes, per the docs:
-        #
-        #   The simplest method is to map the codepoints 0-255 to the bytes
-        #   0x0-0xff. This means that a string object that contains codepoints
-        #   above U+00FF can't be encoded with this method (which is called
-        #   'latin-1' or 'iso-8859-1').
-        #
-        #   http://docs.python.org/3/library/codecs.html#encodings-and-unicode
-
-        _chr = lambda x: chr(x).encode('latin-1')
+    _chr = lambda i: bytes((i,))
 
     for name, arg in codes:
 
@@ -718,9 +687,6 @@ def debug(function):
                     new_consts += (arg,)
                 val = new_consts.index(arg)
             elif op in opcode.hasname:
-                if PYTHON_2:
-                    # In Python 3, func_new wants str (== unicode) for names.
-                    arg = arg.encode('ASCII')
                 if arg not in new_names:
                     new_names += (arg,)
                 val = new_names.index(arg)
@@ -738,18 +704,12 @@ def debug(function):
     i = 0
     n = len(old_code)
     while i < n:
-        c = old_code[i]
-        if type(c) is int:
-            # In Python 3, index access on a bytestring returns an int.
-            c = _chr(c)
-        op = ord(c)
+        # In Python 3, index access on a bytestring returns an int.
+        op = old_code[i]
         i += 1
-        new_code += c
+        new_code += old_code[i:i+1]
         if op >= opcode.HAVE_ARGUMENT:
-            if PYTHON_2:
-                oparg = ord(old_code[i]) + ord(old_code[i+1])*256
-            else:
-                oparg = old_code[i] + old_code[i+1]*256
+            oparg = old_code[i] + old_code[i+1]*256
             if op in opcode.hasjabs:
                 oparg += addr_pad
             i += 2
@@ -768,43 +728,38 @@ def debug(function):
     # ============================================
     # See Objects/codeobject.c in Python source.
 
-    common_args = ( function.__code__.co_nlocals
-                  , function.__code__.co_stacksize
-                  , function.__code__.co_flags
-
-                  , new_code
-                  , new_consts
-                  , new_names
-
-                  , function.__code__.co_varnames
-                  , function.__code__.co_filename
-                  , function.__code__.co_name
-                  , function.__code__.co_firstlineno
-
-                  , new_lnotab
-
-                  , function.__code__.co_freevars
-                  , function.__code__.co_cellvars
-                   )
-
-    if PYTHON_2:
-        new_code = type(function.__code__)(function.__code__.co_argcount, *common_args)
-        new_function = type(function)( new_code
-                                     , function.func_globals
-                                     , function.func_name
-                                     , function.func_defaults
-                                     , function.func_closure
-                                      )
+    if hasattr(function.__code__, 'replace'):
+        # Python >= 3.8
+        new_code = function.__code__.replace(
+            co_code=new_code,
+            co_consts=new_consts,
+            co_names=new_names,
+            co_lnotab=new_lnotab,
+        )
     else:
-        new_code = type(function.__code__)( function.__code__.co_argcount
-                                          , function.__code__.co_kwonlyargcount
-                                          , *common_args
-                                           )
-        new_function = type(function)( new_code
-                                     , function.__globals__
-                                     , function.__name__
-                                     , function.__defaults__
-                                     , function.__closure__
-                                      )
+        new_code = type(function.__code__)(
+            function.__code__.co_argcount,
+            function.__code__.co_kwonlyargcount,
+            function.__code__.co_nlocals,
+            function.__code__.co_stacksize,
+            function.__code__.co_flags,
+            new_code,
+            new_consts,
+            new_names,
+            function.__code__.co_varnames,
+            function.__code__.co_filename,
+            function.__code__.co_name,
+            function.__code__.co_firstlineno,
+            new_lnotab,
+            function.__code__.co_freevars,
+            function.__code__.co_cellvars,
+        )
+    new_function = type(function)(
+        new_code,
+        function.__globals__,
+        function.__name__,
+        function.__defaults__,
+        function.__closure__,
+    )
 
     return new_function
