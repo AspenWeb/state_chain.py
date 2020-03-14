@@ -215,7 +215,6 @@ class StateChain(object):
     START = -1
     END = -2
 
-
     def __init__(self, *functions, **kw):
         self.default_raise_immediately = kw.pop('raise_immediately', False)
         for f in functions:
@@ -349,7 +348,6 @@ class StateChain(object):
 
         return state
 
-
     def __getitem__(self, name):
         """Return the function in the :py:attr:`functions` list named ``name``, or raise
         :py:exc:`FunctionNotFound`.
@@ -373,12 +371,10 @@ class StateChain(object):
             raise FunctionNotFound(name)
         return func
 
-
     def get_names(self):
         """Returns a list of the names of the functions in the :py:attr:`functions` list.
         """
         return [f.__name__ for f in self.functions]
-
 
     def insert_before(self, name, *newfuncs):
         """Insert ``newfuncs`` in the :py:attr:`functions` list before the function named
@@ -413,7 +409,6 @@ class StateChain(object):
             i = self.functions.index(self[name])
         self.functions[i:i] = newfuncs
 
-
     def insert_after(self, name, *newfuncs):
         """Insert ``newfuncs`` in the :py:attr:`functions` list after the function named
         ``name``, or raise :py:exc:`FunctionNotFound`.
@@ -446,7 +441,6 @@ class StateChain(object):
             i = self.functions.index(self[name]) + 1
         self.functions[i:i] = newfuncs
 
-
     def remove(self, *names):
         """Remove the functions named ``name`` from the :py:attr:`functions` list, or raise
         :py:exc:`FunctionNotFound`.
@@ -454,7 +448,6 @@ class StateChain(object):
         for name in names:
             func = self[name]
             self.functions.remove(func)
-
 
     @classmethod
     def from_dotted_name(cls, dotted_name, **kw):
@@ -499,7 +492,6 @@ class StateChain(object):
         module = cls._load_module_from_dotted_name(dotted_name)
         functions = cls._load_functions_from_module(module)
         return cls(*functions, **kw)
-
 
     def debug(self, function):
         """Given a function, return a copy of the function with a breakpoint
@@ -587,7 +579,6 @@ class StateChain(object):
         """
         raise NotImplementedError  # Should be overriden by _DebugMethod in constructor.
 
-
     # Helpers for loading from a file.
     # ================================
 
@@ -599,7 +590,6 @@ class StateChain(object):
         for name in dotted_name.split('.'):
             module = getattr(module, name)
         return module
-
 
     @staticmethod
     def _load_functions_from_module(module):
