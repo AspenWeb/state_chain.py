@@ -5,8 +5,8 @@ python:
   - 3.7
   - 3.8
 before_script:
-  - pip install filesystem_tree pyflakes pytest>=2.4 .
-script: ./runtests.sh
+  - pip install tox-travis
+script: tox
 notifications:
   email: false
 branches:
