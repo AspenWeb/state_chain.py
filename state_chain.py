@@ -154,7 +154,6 @@ API Reference
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import collections
 import opcode
 import sys
 import types
@@ -220,7 +219,7 @@ class StateChain(object):
     def __init__(self, *functions, **kw):
         self.default_raise_immediately = kw.pop('raise_immediately', False)
         if functions:
-            if not isinstance(functions[0], collections.Callable):
+            if not callable(functions[0]):
                 raise TypeError("Not a function: {0}".format(repr(functions[0])))
         self.functions = list(functions)
         self._signatures = {}
