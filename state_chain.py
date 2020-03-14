@@ -218,9 +218,9 @@ class StateChain(object):
 
     def __init__(self, *functions, **kw):
         self.default_raise_immediately = kw.pop('raise_immediately', False)
-        if functions:
-            if not callable(functions[0]):
-                raise TypeError("Not a function: {0}".format(repr(functions[0])))
+        for f in functions:
+            if not callable(f):
+                raise TypeError("Not a function: {0}".format(repr(f)))
         self.functions = list(functions)
         self._signatures = {}
         self.debug = _DebugMethod(self)
