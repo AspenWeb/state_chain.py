@@ -653,8 +653,6 @@ def debug(function):
     # Build bytecode for a set_trace call.
     # ====================================
 
-    NOARG = object()
-
     codes = ( ('LOAD_CONST', 0)
             , ('LOAD_CONST', None)
             , ('IMPORT_NAME', 'pdb')
@@ -662,7 +660,7 @@ def debug(function):
             , ('LOAD_GLOBAL', 'pdb')
             , ('LOAD_ATTR', 'set_trace')
             , ('CALL_FUNCTION', 0)
-            , ('POP_TOP', NOARG)
+            , ('POP_TOP', 0)
              )
 
     new_names = function.__code__.co_names
@@ -670,59 +668,61 @@ def debug(function):
     new_code = b''
     addr_pad = 0
 
-    _chr = lambda i: bytes((i,))
-
     for name, arg in codes:
-
-        # This is the inverse of the subset of dis.disassemble needed to handle
-        # our use case.
-
-        addr_pad += 1
+        # Since Python 3.6, all instructions use exactly two bytes.
+        addr_pad += 2
         op = opcode.opmap[name]
-        new_code += _chr(op)
-        if op >= opcode.HAVE_ARGUMENT:
-            addr_pad += 2
-            if op in opcode.hasconst:
-                if arg not in new_consts:
-                    new_consts += (arg,)
-                val = new_consts.index(arg)
-            elif op in opcode.hasname:
-                if arg not in new_names:
-                    new_names += (arg,)
-                val = new_names.index(arg)
-            elif name == 'CALL_FUNCTION':
-                val = arg  # number of args
-            new_code += _chr(val) + _chr(0)
+        if op in opcode.hasconst:
+            if arg not in new_consts:
+                new_consts += (arg,)
+            arg = new_consts.index(arg)
+        elif op in opcode.hasname:
+            if arg not in new_names:
+                new_names += (arg,)
+            arg = new_names.index(arg)
+        if arg > 0xffffff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 24) & 0xff))
+        if arg > 0xffff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 16) & 0xff))
+        if arg > 0xff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 8) & 0xff))
+            arg &= 0xff
+        new_code += bytes((op, arg))
 
-
-    # Finish inserting our new bytecode in front of the old.
-    # ======================================================
+    # Insert our new bytecode in front of the old.
+    # ============================================
     # Loop over old_code and append it to new_code, fixing up absolute jump
-    # references along the way. Then fix up the line number table.
+    # references along the way. Adapted from `dis._unpack_opargs()`.
 
     old_code = function.__code__.co_code
     i = 0
-    n = len(old_code)
-    while i < n:
+    extended_arg = 0
+    for i in range(0, len(old_code), 2):
         # In Python 3, index access on a bytestring returns an int.
         op = old_code[i]
-        i += 1
-        new_code += old_code[i:i+1]
-        if op >= opcode.HAVE_ARGUMENT:
-            oparg = old_code[i] + old_code[i+1]*256
-            if op in opcode.hasjabs:
-                oparg += addr_pad
-            i += 2
-            new_code += _chr(oparg) + _chr(0)
+        arg = old_code[i+1] | extended_arg
+        if op == opcode.EXTENDED_ARG:
+            extended_arg = arg << 8
+            continue
+        else:
+            extended_arg = 0
+        if op in opcode.hasjabs:
+            arg += addr_pad
+        if arg > 0xffffff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 24) & 0xff))
+        if arg > 0xffff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 16) & 0xff))
+        if arg > 0xff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 8) & 0xff))
+            arg &= 0xff
+        new_code += bytes((op, arg))
+
+    # Fix up the line number table.
+    # =============================
+    # See https://github.com/python/cpython/blob/3.8/Objects/lnotab_notes.txt
 
     old = function.__code__.co_lnotab
-    new_lnotab = ( old[:2]
-                 + _chr( (ord(old[2]) if len(old) > 2 else 0)
-                       + addr_pad
-                        )
-                 + old[3:]
-                  )
-
+    new_lnotab = bytes((addr_pad, 0)) + old
 
     # Now construct new code and function objects.
     # ============================================
