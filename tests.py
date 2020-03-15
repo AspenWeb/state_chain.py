@@ -1,9 +1,11 @@
 import sys
-
 import traceback
-from pytest import raises, yield_fixture
-from state_chain import StateChain, FunctionNotFound
+from unittest.mock import patch
+
 from filesystem_tree import FilesystemTree
+from pytest import raises, yield_fixture
+
+from state_chain import StateChain, FunctionNotFound
 
 
 # fixtures
@@ -199,3 +201,25 @@ def test_per_call_trumps_constructor_for_raise_immediately(sys_path):
     chain = StateChain.from_dotted_name('foo', raise_immediately=True)
     chain.remove('clear')
     raises(NameError, chain.run, _raise_immediately=False)
+
+
+# debug
+# =====
+
+def test_debug_method():
+    def set_trace():
+        set_trace.call_count += 1
+        from inspect import stack
+        frameinfo = stack()[1]
+        assert frameinfo.filename.endswith('blah_state_chain.py')
+        assert frameinfo.lineno == 6
+
+    set_trace.call_count = 0
+    blah = StateChain.from_dotted_name('blah_state_chain')
+    blah.debug.by_name('bar')
+    with patch('pdb.set_trace', set_trace):
+        state = blah.run()
+    assert set_trace.call_count == 1
+    assert state['baz'] == 1
+    assert state['buz'] == 2
+    assert state['sum'] == 3
