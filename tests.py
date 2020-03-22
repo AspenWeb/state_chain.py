@@ -141,7 +141,7 @@ def test_traceback_for_uncleared_exception_reaches_back_to_original_raise():
     chain.remove('clear')
     try:
         chain.run()
-    except:
+    except Exception:
         tb = traceback.format_exc()
     lines = tb.splitlines()
     assert lines[-1] == 'tests.Heck'

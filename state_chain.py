@@ -99,24 +99,25 @@ and make a copy of the chain that we'll use later:
 Now let's interpolate the new functions into our state chain. Let's put the
 ``uh_oh`` function between ``bar`` and ``bloo``:
 
-    >>> chain.add(uh_oh, position=chain.before('bloo'))      #doctest: +ELLIPSIS
+    >>> chain.add(uh_oh, position=chain.before('bloo'))
     <function uh_oh ...>
-    >>> chain.functions      #doctest: +ELLIPSIS
+    >>> chain.functions
     (<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>)
 
 
 Then let's add our exception handler after ``bloo``:
 
-    >>> chain.add(deal_with_it, position=chain.after('bloo'), exception='required')      #doctest: +ELLIPSIS
+    >>> chain.add(deal_with_it, position=chain.after('bloo'), exception='required')
     <function deal_with_it ...>
-    >>> chain.functions      #doctest: +ELLIPSIS
-    (<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>)
+    >>> chain.functions
+    (<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>,
+     <function deal_with_it ...>)
 
 
 Just for kicks, let's remove the ``foo`` function while we're at it:
 
     >>> chain.remove('foo')
-    >>> chain.functions      #doctest: +ELLIPSIS
+    >>> chain.functions
     (<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>)
 
 
@@ -133,7 +134,7 @@ We could have achieved the same result as above like so:
     ...     .add(deal_with_it, exception='required')
     ...     .end()
     ... )
-    >>> chain.functions      #doctest: +ELLIPSIS
+    >>> chain.functions
     (<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>)
 
 
@@ -201,6 +202,7 @@ class IncompleteModification(Exception):
 
 
 _NO_PREVIOUS = object()
+
 
 def _iter_with_previous(iterable):
     prev = _NO_PREVIOUS
@@ -414,7 +416,7 @@ class StateChain:
         Of course, the method doesn't have to be used as a decorator:
 
         >>> def bah(): pass
-        >>> algo.add(bah, position=0)   #doctest: +ELLIPSIS
+        >>> algo.add(bah, position=0)
         <function bah at ...>
         >>> algo.get_names()
         ['bah', 'bal', 'bar', 'baz', 'foo']
@@ -478,7 +480,7 @@ class StateChain:
         ...     pass
         ...
         >>> algo = StateChain(SimpleNamespace, functions=[foo])
-        >>> algo.debug(foo)             #doctest: +ELLIPSIS
+        >>> algo.debug(foo)
         <function foo at ...>
         >>> algo.run()                  #doctest: +SKIP
         (Pdb)
@@ -486,7 +488,7 @@ class StateChain:
         Second, you can debug a function by passing its name:
 
         >>> algo = StateChain(SimpleNamespace, functions=[foo])
-        >>> algo.debug('foo')           #doctest: +ELLIPSIS
+        >>> algo.debug('foo')
         <function foo at ...>
         >>> algo.run()                  #doctest: +SKIP
         (Pdb)
@@ -616,15 +618,16 @@ def debug(function):
     # Build bytecode for a set_trace call.
     # ====================================
 
-    codes = ( ('LOAD_CONST', 0)
-            , ('LOAD_CONST', None)
-            , ('IMPORT_NAME', 'pdb')
-            , ('STORE_GLOBAL', 'pdb')
-            , ('LOAD_GLOBAL', 'pdb')
-            , ('LOAD_ATTR', 'set_trace')
-            , ('CALL_FUNCTION', 0)
-            , ('POP_TOP', 0)
-             )
+    codes = (
+        ('LOAD_CONST', 0),
+        ('LOAD_CONST', None),
+        ('IMPORT_NAME', 'pdb'),
+        ('STORE_GLOBAL', 'pdb'),
+        ('LOAD_GLOBAL', 'pdb'),
+        ('LOAD_ATTR', 'set_trace'),
+        ('CALL_FUNCTION', 0),
+        ('POP_TOP', 0),
+    )
 
     new_names = function.__code__.co_names
     new_consts = function.__code__.co_consts
