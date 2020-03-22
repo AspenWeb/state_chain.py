@@ -83,6 +83,9 @@ add_function_parentheses = False
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
 
+# Get rid of the need for `py:` prefixes everywhere.
+primary_domain = 'py'
+
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
 
@@ -93,9 +96,7 @@ pygments_style = 'sphinx'
 # a list of builtin themes.
 html_theme = 'default'
 
-intersphinx_mapping = { 'dependency_injection'
-                      : ('http://dependency-injection-py.readthedocs.org/en/latest/', None)
-                       }
+intersphinx_mapping = {}
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

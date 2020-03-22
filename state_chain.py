@@ -1,17 +1,17 @@
-"""Model algorithms as a list of functions operating on a shared state dict.
+"""Model algorithms as a list of functions operating on a shared state object.
 
 
 Installation
 ------------
 
-:py:mod:`state_chain` is available on `GitHub`_ and on `PyPI`_::
+:mod:`state_chain` is available on `GitHub`_ and on `PyPI`_::
 
     $ pip install state_chain
 
-The version of :py:mod:`state_chain` documented here has been `tested`_ against
+The version of :mod:`state_chain` documented here has been `tested`_ against
 Python 3.6, 3.7 and 3.8 on Ubuntu.
 
-:py:mod:`state_chain` is MIT-licensed.
+:mod:`state_chain` is MIT-licensed.
 
 
 .. _GitHub: https://github.com/AspenWeb/state_chain.py
@@ -23,106 +23,126 @@ Tutorial
 --------
 
 This module provides an abstraction for implementing arbitrary algorithms as a
-list of functions that operate on a shared state dictionary. Algorithms defined
+list of functions that operate on a shared state object. Algorithms defined
 this way are easy to arbitrarily modify at run time, and they provide cascading
 exception handling.
 
-To get started, define some functions:
+To get started, define a state type, for example:
 
-    >>> def foo():
-    ...     return {'baz': 1}
-    ...
-    >>> def bar():
-    ...     return {'buz': 2}
-    ...
-    >>> def bloo(baz, buz):
-    ...     return {'sum': baz + buz}
+    >>> from dataclasses import dataclass
+    >>> from typing import Optional
+    >>> @dataclass
+    ... class State:
+    ...     x: int = 0
+    ...     y: int = 0
+    ...     sum: int = 0
+    ...     exception: Optional[Exception] = None
     ...
 
 
-Each function returns a :py:class:`dict`, which is used to update the state of
-the current run of the algorithm. Names from the state dictionary are made
-available to downstream functions via :py:mod:`dependency_injection`. Now
-make an :py:class:`StateChain` object:
+Then create a :class:`StateChain` object:
 
     >>> from state_chain import StateChain
-    >>> blah = StateChain(foo, bar, bloo)
+    >>> chain = StateChain(State)
 
 
-The functions you passed to the constructor are loaded into a list:
+And add some functions to it:
 
-    >>> blah.functions          #doctest: +ELLIPSIS
-    [<function foo ...>, <function bar ...>, <function bloo ...>]
+    >>> @chain.add
+    ... def foo(state: State):
+    ...     state.x = 1
+    ...
+    >>> @chain.add
+    ... def bar(state: State):
+    ...     state.y = 2
+    ...
+    >>> @chain.add
+    ... def bloo(state: State):
+    ...     state.sum = state.x + state.y
+    ...
 
 
-Now you can use :py:func:`~StateChain.run` to run the functions. You'll get back
-a dictionary representing the algorithm's final state:
+As you can see, each function will receive the ``state`` object as its only argument.
+Moreover you may have noticed that the functions don't return anything. Returning
+a value isn't prohibited, but that value will be ignored by the :func:`~StateChain.run`
+method.
 
-    >>> state = blah.run()
-    >>> state['sum']
+Speaking of the run method, let's give it a go:
+
+    >>> state = chain.run()
+    >>> state.sum
     3
 
-Okay!
+Okay, we have the expected sum!
 
 
 Modifying a State Chain
 +++++++++++++++++++++++
 
-Let's add two functions to the state chain. First let's define the functions:
+Let's define two more functions to add to the state chain:
 
-    >>> def uh_oh(baz):
-    ...     if baz == 2:
+    >>> def uh_oh(state: State):
+    ...     if state.x == 0:
     ...         raise heck
     ...
-    >>> def deal_with_it(exception):
+    >>> def deal_with_it(state: State):
     ...     print("I am dealing with it!")
-    ...     return {'exception': None}
+    ...     state.exception = None
     ...
 
 
-Now let's interpolate them into our state chain. Let's put the ``uh_oh``
-function between ``bar`` and ``bloo``:
+and make a copy of the chain that we'll use later:
 
-    >>> blah.insert_before('bloo', uh_oh)
-    >>> blah.functions      #doctest: +ELLIPSIS
-    [<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>]
+    >>> chain_copy = chain.copy()
 
 
-Then let's add our exception handler at the end:
+Now let's interpolate the new functions into our state chain. Let's put the
+``uh_oh`` function between ``bar`` and ``bloo``:
 
-    >>> blah.insert_after('bloo', deal_with_it)
-    >>> blah.functions      #doctest: +ELLIPSIS
-    [<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
+    >>> chain.add(uh_oh, position=chain.before('bloo'))      #doctest: +ELLIPSIS
+    <function uh_oh ...>
+    >>> chain.functions      #doctest: +ELLIPSIS
+    (<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>)
+
+
+Then let's add our exception handler after ``bloo``:
+
+    >>> chain.add(deal_with_it, position=chain.after('bloo'), exception='required')      #doctest: +ELLIPSIS
+    <function deal_with_it ...>
+    >>> chain.functions      #doctest: +ELLIPSIS
+    (<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>)
 
 
 Just for kicks, let's remove the ``foo`` function while we're at it:
 
-    >>> blah.remove('foo')
-    >>> blah.functions      #doctest: +ELLIPSIS
-    [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
+    >>> chain.remove('foo')
+    >>> chain.functions      #doctest: +ELLIPSIS
+    (<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>)
 
 
-If you're making extensive changes to a state chain, you should feel free to
-directly manipulate the list of functions, rather than using the more
-cumbersome :py:meth:`~state_chain.StateChain.insert_before`,
-:py:meth:`~state_chain.StateChain.insert_after`, and
-:py:meth:`~state_chain.StateChain.remove` methods. We could have achieved the
-same result like so:
+Note: when making extensive changes to a state chain, you can use the
+:meth:`~StateChain.modify` method to rebuild the entire chain in a safe way.
+We could have achieved the same result as above like so:
 
-    >>> blah.functions = [ blah['bar']
-    ...                  , uh_oh
-    ...                  , blah['bloo']
-    ...                  , deal_with_it
-    ...                   ]
-    >>> blah.functions      #doctest: +ELLIPSIS
-    [<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>]
+    >>> chain = (
+    ...     chain_copy.modify()
+    ...     .drop('foo')
+    ...     .add('bar')
+    ...     .add(uh_oh)
+    ...     .add('bloo')
+    ...     .add(deal_with_it, exception='required')
+    ...     .end()
+    ... )
+    >>> chain.functions      #doctest: +ELLIPSIS
+    (<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>)
 
 
-Either way, what happens when we run it? Since we no longer have the ``foo``
-function providing a value for ``bar``, we'll need to supply that using a
-keyword argument to :py:func:`~StateChain.run`:
+This allows you to see exactly what your chain does and how it differs from the
+original chain.
 
-    >>> state = blah.run(baz=2)
+Either way, what happens when we run it?
+
+    >>> state = chain.run()
     I am dealing with it!
 
 
@@ -130,21 +150,20 @@ Exception Handling
 ++++++++++++++++++
 
 Whenever a function raises an exception, like ``uh_oh`` did in the example
-above, :py:class:`~StateChain.run` captures the exception and populates an
-``exception`` key in the current run's state dictionary. While ``exception`` is
-not ``None``, any normal function is skipped, and only functions that ask for
-``exception`` get called. It's like a fast-forward. So in our example
-``deal_with_it`` got called, but ``bloo`` didn't, which is why there is no
-``sum``:
+above, :class:`~StateChain.run` captures the exception and assigns it to
+``state.exception``. As long as this state attribute is not ``None``, any normal
+function is skipped, and only exception handling functions get called. It's like
+a fast-forward. So in our example ``deal_with_it`` got called, but ``bloo``
+didn't, which is why ``sum`` is zero:
 
-    >>> 'sum' in state
-    False
+    >>> state.sum
+    0
 
 
-If we run without tripping the exception in ``uh_oh`` then we have ``sum`` at
+If we run without tripping the exception in ``uh_oh``, then we have the sum at
 the end:
 
-    >>> blah.run(baz=5)['sum']
+    >>> chain.run(State(x=5)).sum
     7
 
 
@@ -153,11 +172,9 @@ API Reference
 
 """
 
+from collections import OrderedDict
+from functools import partial
 import opcode
-import sys
-import types
-
-from dependency_injection import get_signature, resolve_dependencies
 
 
 __version__ = '1.5.0.dev0'
@@ -165,10 +182,22 @@ __version__ = '1.5.0.dev0'
 
 class FunctionNotFound(KeyError):
     """Used when a function is not found in a state_chain function list
-    (subclasses :py:exc:`KeyError`).
+    (subclasses :exc:`KeyError`).
     """
     def __str__(self):
         return "The function '{0}' isn't in this state chain.".format(*self.args)
+
+
+class IncompleteModification(Exception):
+    """
+    Raised by :class:`ChainModifier.end` when one or more functions from the
+    original chain has neither been dropped nor added to the modified chain.
+    """
+    def __str__(self):
+        return (
+            "The following functions have neither been dropped nor added to the "
+            "modified chain: %r" % self.args
+        )
 
 
 _NO_PREVIOUS = object()
@@ -181,147 +210,132 @@ def _iter_with_previous(iterable):
 
 
 class StateChain:
-    """Model an algorithm as a list of functions operating on a shared state
-    dictionary.
+    """Model an algorithm as a list of functions operating on a shared state.
 
+    :param type state_type: the type of the state object
     :param functions: a sequence of functions in the order they are to be run
-    :param bool raise_immediately: Whether to re-raise exceptions immediately.
-        :py:class:`False` by default, this can only be set as a keyword argument
-
-    Each function in the state chain must return a mapping or :py:class:`None`.
-    If it returns a mapping, the mapping will be used to update a state
-    dictionary for the current run of the algorithm. Functions in the state
-    chain can use any name from the current state dictionary as a parameter,
-    and the value will then be supplied dynamically via
-    :py:mod:`dependency_injection`.  See the :py:func:`run` method for details
-    on exception handling.
+    :param bool raise_immediately: whether to re-raise exceptions immediately
 
     """
 
-    START = -1
-    END = -2
+    __slots__ = (
+        'state_type', 'raise_immediately', '_functions',
+        '__dict__',
+    )
 
-    def __init__(self, *functions, **kw):
-        self.default_raise_immediately = kw.pop('raise_immediately', False)
-        for f in functions:
-            if not callable(f):
-                raise TypeError("Not a function: {0}".format(repr(f)))
-        self.functions = list(functions)
-        self._signatures = {}
-        self.debug = _DebugMethod(self)
+    def __init__(self, state_type, functions=(), raise_immediately=False):
+        self.state_type = state_type
+        self._functions = ()
+        self.add(*functions)
+        self.raise_immediately = raise_immediately
 
+    @property
+    def functions(self):
+        return tuple(func for func, _ in self._functions)
 
-    def run(self, state=None, _raise_immediately=None, _return_after=None, **kw):
-        """Run through the functions in the :py:attr:`functions` list.
+    def copy(self):
+        """Returns a copy of this chain.
+        """
+        r = StateChain(self.state_type, raise_immediately=self.raise_immediately)
+        r._functions = self._functions
+        r.__dict__ = self.__dict__.copy()
+        return r
 
-        :param dict state: the initial state dictionary for this run of the chain
+    def run(self, state=None, raise_immediately=None, return_after=None):
+        """Run through the functions in the :attr:`functions` list.
 
-        :param bool _raise_immediately: if not ``None``, will override any
+        :param State state: the initial state object for this run of the chain
+            (`self.state_type()` is called to create an object if none is provided)
+
+        :param bool raise_immediately: if not ``None``, will override any
             default for ``raise_immediately`` that was set in the constructor
 
-        :param str _return_after: if not ``None``, return after calling the function
+        :param str return_after: if not ``None``, return after calling the function
             with this name
 
-        :param kw: remaining keyword arguments are added to the ``state`` dict
+        :raises: :exc:`FunctionNotFound`, if there is no function named
+            ``return_after``
 
-        :raises: :py:exc:`FunctionNotFound`, if there is no function named
-            ``_return_after``
+        :returns: the ``state`` object
 
-        :returns: a dictionary representing the final state
-
-        The state dictionary is initialized with three items (their default
-        values can be overriden using keyword arguments to :py:func:`run`):
-
-         - ``chain`` - a reference to the parent :py:class:`StateChain` instance
-         - ``state`` - a circular reference to the state dictionary
-         - ``exception`` - ``None``
-
-        For each function in the :py:attr:`functions` list, we look at the
-        function signature and compare it to the current value of ``exception``
-        in the state dictionary. If ``exception`` is ``None`` then we skip any
-        function that asks for ``exception``, and if ``exception`` is *not*
-        ``None`` then we only call functions that *do* ask for it. The upshot
-        is that any function that raises an exception will cause us to
-        fast-forward to the next exception-handling function in the list.
+        For each function in the :attr:`functions` list, we look at the
+        function's exception preference and at the current value of
+        ``state.exception``. If ``state.exception`` is ``None``, then we skip
+        any function whose exception preference is :obj:`'required'`, and if
+        ``state.exception`` is *not* ``None`` then we only call functions whose
+        exception preference is not :obj:`'unwanted'`. The upshot is that any
+        function that raises an exception will cause us to fast-forward to the
+        next exception-handling function in the list.
 
         Here are some further notes on exception handling:
 
-         - If a function provides a default value for ``exception``, then that
+         - If a function's exception preference is :attr:`'accepted'`, then that
            function will be called whether or not there is an exception being
            handled.
 
-         - You should return ``{'exception': None}`` to reset exception
-           handling.
+         - You should set ``state.exception = None`` when an exception has been
+           handled. The chain run will resume normally from where it is (it
+           won't backtrack to run the functions that were skipped during
+           exception handling).
 
          - If an exception is raised by a function handling another exception,
-           then ``exception`` is set to the new one and we look for the next
-           exception handler.
+           then ``state.exception`` is set to the new one and we look for the
+           next exception handler.
 
-         - If ``exception`` is not ``None`` after all functions have been run,
-           then we re-raise it.
+         - If ``state.exception`` is not ``None`` after all functions have been
+           run, then we re-raise it.
 
-         - If ``raise_immediately`` evaluates to ``True`` (looking first at any
-           per-call ``_raise_immediately`` and then at the instance default),
-           then we re-raise any exception immediately instead of
-           fast-forwarding to the next exception handler.
+         - If ``raise_immediately`` evaluates to ``True`` (looking first at the
+           ``raise_immediately`` argument and falling back to the chain's
+           ``raise_immediately`` attribute), then we re-raise any exception
+           immediately instead of fast-forwarding to the next exception handler.
 
-         - When an exception occurs, the functions that accept an ``exception``
-           argument will be called from inside the ``except:`` block, so you
-           can access ``sys.exc_info`` (which contains the traceback).
+         - When an exception occurs, the chain functions that handle it are
+           called from inside the ``except:`` block, so you can access
+           ``sys.exc_info`` (which contains the traceback).
 
         """
 
         if state is None:
-            state = {}
-        if kw:
-            state.update(kw)
+            state = self.state_type()
 
-        if _raise_immediately is None:
-            _raise_immediately = self.default_raise_immediately
+        if raise_immediately is None:
+            raise_immediately = self.raise_immediately
 
-        if _return_after is not None:
-            if _return_after not in self.get_names():
-                raise FunctionNotFound(_return_after)
+        if return_after is not None:
+            return_after = self[return_after]
 
-        if 'chain' not in state:        state['chain'] = self
-        if 'state' not in state:        state['state'] = state
-        if 'exception' not in state:    state['exception'] = None
+        if not hasattr(state, 'exception'):
+            state.exception = None
 
         # The `for` loop in the `loop()` function below can be entered multiple
         # times since that function calls itself when an exception is raised.
         # If we looped over the `functions` list we'd be starting from the top
         # at each exception, and that's not what we want, so we use an iterator
         # instead to keep track of where we are in the state chain.
-        functions_iter = _iter_with_previous(self.functions)
+        functions_iter = _iter_with_previous(self._functions)
 
         def loop(in_except):
-            signatures = self._signatures
-            for function, prev_func in functions_iter:
-                if _return_after is not None and prev_func is not _NO_PREVIOUS:
-                    if prev_func.__name__ == _return_after:
-                        break
+            for (function, exception_preference), (prev_func, _) in functions_iter:
+                if prev_func is return_after:
+                    break
+                if in_except:
+                    # Skip when function doesn't want exception but we have it.
+                    if exception_preference == 'unwanted':
+                        continue
+                else:
+                    # Skip when function wants exception but we don't have it.
+                    if exception_preference == 'required':
+                        continue
                 try:
-                    if function not in signatures:
-                        signatures[function] = get_signature(function)
-                    deps = resolve_dependencies(signatures[function], state)
-                    skip = (
-                        # When function wants exception but we don't have it.
-                        not in_except and 'exception' in deps.signature.required
-                        or
-                        # When function doesn't want exception but we have it.
-                        in_except and 'exception' not in deps.signature.parameters
-                    )
-                    if not skip:
-                        new_state = function(**deps.as_kwargs)
-                        if new_state is not None:
-                            state.update(new_state)
-                        if in_except and state['exception'] is None:
-                            # exception is cleared, return to normal flow
-                            return
-                except Exception:
-                    if _raise_immediately:
+                    function(state)
+                    if in_except and state.exception is None:
+                        # exception is cleared, return to normal flow
+                        return
+                except Exception as e:
+                    if raise_immediately:
                         raise
-                    state['exception'] = sys.exc_info()[1]
+                    state.exception = e
                     loop(True)
                     if in_except:
                         # an exception occurred while we were handling another
@@ -329,18 +343,24 @@ class StateChain:
                         # the normal flow
                         return
             if in_except:
-                raise  # exception hasn't been handled, reraise
+                raise state.exception  # exception hasn't been handled, reraise
 
-        loop(False)
+        loop(state.exception is not None)
 
         return state
 
-    def __getitem__(self, name):
-        """Return the function in the :py:attr:`functions` list named ``name``, or raise
-        :py:exc:`FunctionNotFound`.
+    def __contains__(self, func_ref):
+        if isinstance(func_ref, str):
+            return func_ref in self.get_names()
+        return any(func_ref is func for func, _ in self._functions)
 
+    def __getitem__(self, name):
+        """Return the function in the :attr:`functions` list named ``name``, or raise
+        :exc:`FunctionNotFound`.
+
+        >>> class State: pass
         >>> def foo(): pass
-        >>> algo = StateChain(foo)
+        >>> algo = StateChain(State, functions=[foo])
         >>> algo['foo'] is foo
         True
         >>> algo['bar']
@@ -349,274 +369,211 @@ class StateChain:
         state_chain.FunctionNotFound: The function 'bar' isn't in this state chain.
 
         """
-        func = None
         for candidate in self.functions:
             if candidate.__name__ == name:
-                func = candidate
-                break
-        if func is None:
-            raise FunctionNotFound(name)
-        return func
+                return candidate
+        raise FunctionNotFound(name)
 
     def get_names(self):
-        """Returns a list of the names of the functions in the :py:attr:`functions` list.
+        """Returns a list of the names of the functions in the :attr:`functions` list.
         """
         return [f.__name__ for f in self.functions]
 
-    def insert_before(self, name, *newfuncs):
-        """Insert ``newfuncs`` in the :py:attr:`functions` list before the function named
-        ``name``, or raise :py:exc:`FunctionNotFound`.
+    def add(self, *funcs, position=None, exception='unwanted'):
+        """Insert functions into the chain.
 
-        >>> def foo(): pass
-        >>> algo = StateChain(foo)
-        >>> def bar(): pass
-        >>> algo.insert_before('foo', bar)
+        :param funcs: the function(s) to add to the chain
+
+        :param int position: where to insert the function in the chain
+
+        :param str exception: determines when this function will be run or skipped.
+            The valid values are: 'unwanted', 'accepted', and 'required'.
+
+        :raises: :exc:`TypeError` if an element of the ``funcs`` list isn't a callable
+
+        >>> from types import SimpleNamespace
+        >>> algo = StateChain(SimpleNamespace)
+        >>> @algo.add
+        ... def foo(): pass
+
+        >>> @algo.add(position=0)
+        ... def bar(): pass
         >>> algo.get_names()
         ['bar', 'foo']
-        >>> def baz(): pass
-        >>> algo.insert_before('foo', baz)
+
+        >>> @algo.add(position=algo.after('bar'), exception='accepted')
+        ... def baz(): pass
         >>> algo.get_names()
         ['bar', 'baz', 'foo']
-        >>> def bal(): pass
-        >>> algo.insert_before(StateChain.START, bal)
+
+        >>> @algo.add(position=algo.before('bar'), exception='required')
+        ... def bal(): pass
         >>> algo.get_names()
         ['bal', 'bar', 'baz', 'foo']
-        >>> def bah(): pass
-        >>> algo.insert_before(StateChain.END, bah)
-        >>> algo.get_names()
-        ['bal', 'bar', 'baz', 'foo', 'bah']
 
+        Of course, the method doesn't have to be used as a decorator:
+
+        >>> def bah(): pass
+        >>> algo.add(bah, position=0)   #doctest: +ELLIPSIS
+        <function bah at ...>
+        >>> algo.get_names()
+        ['bah', 'bal', 'bar', 'baz', 'foo']
 
         """
-        if name == self.START:
-            i = 0
-        elif name == self.END:
-            i = len(self.functions)
+        if not funcs:
+            return partial(self.add, position=position, exception=exception)
+        for f in funcs:
+            if not callable(f):
+                raise TypeError("Not a function: " + repr(f))
+        func_tuples = tuple((f, exception) for f in funcs)
+        if position is None:
+            self._functions += func_tuples
         else:
-            i = self.functions.index(self[name])
-        self.functions[i:i] = newfuncs
+            self._functions = (
+                self._functions[:position] + func_tuples + self._functions[position:]
+            )
+        if len(funcs) == 1:
+            return funcs[0]
 
-    def insert_after(self, name, *newfuncs):
-        """Insert ``newfuncs`` in the :py:attr:`functions` list after the function named
-        ``name``, or raise :py:exc:`FunctionNotFound`.
-
-        >>> def foo(): pass
-        >>> algo = StateChain(foo)
-        >>> def bar(): pass
-        >>> algo.insert_after('foo', bar)
-        >>> algo.get_names()
-        ['foo', 'bar']
-        >>> def baz(): pass
-        >>> algo.insert_after('bar', baz)
-        >>> algo.get_names()
-        ['foo', 'bar', 'baz']
-        >>> def bal(): pass
-        >>> algo.insert_after(StateChain.START, bal)
-        >>> algo.get_names()
-        ['bal', 'foo', 'bar', 'baz']
-        >>> def bah(): pass
-        >>> algo.insert_before(StateChain.END, bah)
-        >>> algo.get_names()
-        ['bal', 'foo', 'bar', 'baz', 'bah']
-
+    def after(self, func_name):
+        """Returns the chain position immediately after the function named `func_name`.
         """
-        if name == self.START:
-            i = 0
-        elif name == self.END:
-            i = len(self.functions)
-        else:
-            i = self.functions.index(self[name]) + 1
-        self.functions[i:i] = newfuncs
+        return self.functions.index(self[func_name]) + 1
+
+    def before(self, func_name):
+        """Returns the position of the function named `func_name` in this chain.
+        """
+        return self.functions.index(self[func_name])
 
     def remove(self, *names):
-        """Remove the functions named ``name`` from the :py:attr:`functions` list, or raise
-        :py:exc:`FunctionNotFound`.
-        """
-        for name in names:
-            func = self[name]
-            self.functions.remove(func)
+        """Remove the functions named ``name`` from the chain.
 
-    @classmethod
-    def from_dotted_name(cls, dotted_name, **kw):
-        """Construct a new instance from functions defined in a Python module.
-
-        :param dotted_name: the dotted name of a Python module that contains
-            functions that will be added to a state chain in the order of appearance.
-
-        :param kw: keyword arguments are passed through to the default constructor
-
-        This is a convenience constructor to instantiate a state chain based on
-        functions defined in a regular Python file. For example, create a file named
-        ``blah_state_chain.py`` on your ``PYTHONPATH``::
-
-            def foo():
-                return {'baz': 1}
-
-            def bar():
-                return {'buz': 2}
-
-            def bloo(baz, buz):
-                return {'sum': baz + buz}
-
-
-        Then pass the dotted name of the file to this constructor:
-
-        >>> blah = StateChain.from_dotted_name('blah_state_chain')
-
-        All functions defined in the file whose name doesn't begin with ``_``
-        are loaded into a list in the order they're defined in the file, and
-        this list is passed to the default class constructor.
-
-        >>> blah.functions #doctest: +ELLIPSIS
-        [<function foo ...>, <function bar ...>, <function bloo ...>]
-
-        For this specific module, the code above is equivalent to:
-
-        >>> from blah_state_chain import foo, bar, bloo
-        >>> blah = StateChain(foo, bar, bloo)
+        :raises: :exc:`FunctionNotFound` if a name isn't found in the chain.
 
         """
-        module = cls._load_module_from_dotted_name(dotted_name)
-        functions = cls._load_functions_from_module(module)
-        return cls(*functions, **kw)
+        funcs = set(self[name] for name in names)
+        self._functions = tuple(t for t in self._functions if t[0] not in funcs)
+
+    def modify(self):
+        """Returns a :class:`ChainModifier` object.
+        """
+        return ChainModifier(self)
 
     def debug(self, function):
-        """Given a function, return a copy of the function with a breakpoint
-        immediately inside it.
+        """Debug a specific function in the chain.
 
-        :param function function: a function object
+        :param function: a function object or name
 
-        This method wraps the module-level function
-        :py:func:`state_chain.debug`, adding three conveniences.
+        :raises: :exc:`FunctionNotFound` if the function isn't in this chain
+
+        This method wraps the module-level function :func:`state_chain.debug`,
+        adding two conveniences.
 
         First, calling this method not only returns a copy of the function with
         a breakpoint installed, it actually replaces the old function in the
         state chain with the copy. So you can do:
 
-        >>> def foo():
+        >>> from types import SimpleNamespace
+        >>> def foo(state):
         ...     pass
         ...
-        >>> algo = StateChain(foo)
+        >>> algo = StateChain(SimpleNamespace, functions=[foo])
         >>> algo.debug(foo)             #doctest: +ELLIPSIS
         <function foo at ...>
         >>> algo.run()                  #doctest: +SKIP
         (Pdb)
 
-        Second, it provides a method on itself to install via function name
-        instead of function object:
+        Second, you can debug a function by passing its name:
 
-        >>> algo = StateChain(foo)
-        >>> algo.debug.by_name('foo')   #doctest: +ELLIPSIS
+        >>> algo = StateChain(SimpleNamespace, functions=[foo])
+        >>> algo.debug('foo')           #doctest: +ELLIPSIS
         <function foo at ...>
         >>> algo.run()                  #doctest: +SKIP
         (Pdb)
 
-        Third, it aliases the :py:meth:`~DebugMethod.by_name` method as
-        :py:meth:`~_DebugMethod.__getitem__` so you can use mapping access as well:
+        """
+        if isinstance(function, str):
+            function = self[function]
+        try:
+            i = self.functions.index(function)
+        except ValueError:
+            raise FunctionNotFound(function)
+        debugging_function = debug(function)
+        self._functions = (
+            self._functions[:i] +
+            ((debugging_function, self._functions[i][1]),) +
+            self._functions[i+1:]
+        )
+        return debugging_function
 
-        >>> algo = StateChain(foo)
-        >>> algo.debug['foo']           #doctest: +ELLIPSIS
-        <function foo at ...>
-        >>> algo.run()                  #doctest: +SKIP
-        (Pdb)
 
-        Why would you want to do that? Well, let's say you've written a library
-        that includes a state chain:
+class ChainModifier:
+    """This class facilitates the safe modification of a :class:`StateChain`.
 
-        >>> def foo(): pass
-        ...
-        >>> def bar(): pass
-        ...
-        >>> def baz(): pass
-        ...
-        >>> blah = StateChain(foo, bar, baz)
+    Note that this class doesn't actually alter the given chain, it only returns
+    a modified copy of that chain.
 
-        And now some user of your library ends up rebuilding the functions list
-        using some of the original functions and some of their own:
+    """
 
-        >>> def mine(): pass
-        ...
-        >>> def precious(): pass
-        ...
-        >>> blah.functions = [ blah['foo']
-        ...                  , mine
-        ...                  , blah['bar']
-        ...                  , precious
-        ...                  , blah['baz']
-        ...                   ]
+    __slots__ = ('new_chain', 'old_functions')
 
-        Now the user of your library wants to debug ``blah['bar']``, but since
-        they're using your code as a library it's inconvenient for them to drop
-        a breakpoint in your source code. With this feature, they can just
-        insert ``.debug`` in their own source code like so:
+    def __init__(self, chain):
+        self.new_chain = StateChain(chain.state_type, raise_immediately=chain.raise_immediately)
+        self.new_chain.__dict__ = chain.__dict__
+        self.old_functions = OrderedDict((f.__name__, f) for f in chain.functions)
 
-        >>> blah.functions = [ blah['foo']
-        ...                  , mine
-        ...                  , blah.debug['bar']
-        ...                  , precious
-        ...                  , blah['baz']
-        ...                   ]
+    def add(self, func_ref, exception='unwanted'):
+        """Append a function to the modified chain.
 
-        Now when they run the state chain they'll hit a pdb breakpoint just
-        inside your ``bar`` function:
+        :param func_ref: the function to add, either a function object or the name
+            of a function present in the original chain
 
-        >>> blah.run()              #doctest: +SKIP
-        (Pdb)
+        :param exception: see :meth:`StateChain.add`
+
+        :raises: :exc:`FunctionNotFound` if `func_ref` is a string that doesn't
+            match any function name from the original chain
 
         """
-        raise NotImplementedError  # Should be overriden by _DebugMethod in constructor.
+        if isinstance(func_ref, str):
+            try:
+                func = self.old_functions[func_ref]
+            except KeyError:
+                func = self.new_chain[func_ref]
+        elif callable(func_ref):
+            func = func_ref
+        else:
+            raise TypeError("expected a string or function, got " + repr(type(func_ref)))
+        self.new_chain.add(func, exception=exception)
+        self.old_functions.pop(func.__name__, None)
+        return self
 
-    # Helpers for loading from a file.
-    # ================================
-
-    @staticmethod
-    def _load_module_from_dotted_name(dotted_name):
-        class RootModule(object): pass
-        module = RootModule()  # let's us use getattr to traverse down
-        exec('import {0}'.format(dotted_name), module.__dict__)
-        for name in dotted_name.split('.'):
-            module = getattr(module, name)
-        return module
-
-    @staticmethod
-    def _load_functions_from_module(module):
-        """Given a module object, return a list of functions from the module, sorted by lineno.
+    def debug(self, func_ref, exception='unwanted'):
+        """Same as :meth:`add`, but wraps the chain function with :func:`debug`.
         """
-        functions_with_lineno = []
-        for name in dir(module):
-            if name.startswith('_'):
-                continue
-            obj = getattr(module, name)
-            if type(obj) != types.FunctionType:
-                continue
-            func = obj
-            lineno = func.__code__.co_firstlineno
-            functions_with_lineno.append((lineno, func))
-        functions_with_lineno.sort()
-        return [f for i, f in functions_with_lineno]
+        self.add(func_ref, exception=exception)
+        func = self.new_chain.functions[-1]
+        self.new_chain.debug(func)
+        return self
+
+    def drop(self, func_name):
+        """Skip a function present in the original chain.
+        """
+        try:
+            self.old_functions.pop(func_name)
+        except KeyError:
+            raise FunctionNotFound(func_name)
+        return self
+
+    def end(self):
+        """Returns the modified copy of the original chain.
+        """
+        if self.old_functions:
+            raise IncompleteModification(list(self.old_functions.values()))
+        return self.new_chain
 
 
 # Debugging Helpers
 # =================
-
-class _DebugMethod(object):
-    # See docstring at StateChain.debug.
-
-    def __init__(self, chain):
-        self.chain = chain
-
-    def __call__(self, function):
-        debugging_function = debug(function)
-        for i, candidate in enumerate(self.chain.functions):
-            if candidate is function:
-                self.chain.functions[i] = debugging_function
-        return debugging_function
-
-    def by_name(self, name):
-        return self(self.chain[name])
-
-    __getitem__ = by_name
-
 
 def debug(function):
     """Given a function, return a copy of the function with a breakpoint
@@ -635,8 +592,8 @@ def debug(function):
     function call and then step into the function. No: this helper is only
     useful when you've got a function object that you want to debug, and you
     have neither the definition nor the call conveniently at hand. See the
-    method :py:meth:`StateChain.debug` for an explanation of how this situation
-    arises with the :py:mod:`state_chain` module.
+    method :meth:`StateChain.debug` for an explanation of how this situation
+    arises with the :mod:`state_chain` module.
 
     For our purposes here, it's enough to know that you can wrap any function:
 
