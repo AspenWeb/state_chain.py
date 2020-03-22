@@ -211,8 +211,10 @@ class StateChain:
         self.debug = _DebugMethod(self)
 
 
-    def run(self, _raise_immediately=None, _return_after=None, **state):
+    def run(self, state=None, _raise_immediately=None, _return_after=None, **kw):
         """Run through the functions in the :py:attr:`functions` list.
+
+        :param dict state: the initial state dictionary for this run of the chain
 
         :param bool _raise_immediately: if not ``None``, will override any
             default for ``raise_immediately`` that was set in the constructor
@@ -220,8 +222,7 @@ class StateChain:
         :param str _return_after: if not ``None``, return after calling the function
             with this name
 
-        :param dict state: remaining keyword arguments are used for the initial
-            state dictionary for this run of the state chain
+        :param kw: remaining keyword arguments are added to the ``state`` dict
 
         :raises: :py:exc:`FunctionNotFound`, if there is no function named
             ``_return_after``
@@ -269,6 +270,11 @@ class StateChain:
            can access ``sys.exc_info`` (which contains the traceback).
 
         """
+
+        if state is None:
+            state = {}
+        if kw:
+            state.update(kw)
 
         if _raise_immediately is None:
             _raise_immediately = self.default_raise_immediately
