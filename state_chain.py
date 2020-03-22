@@ -9,7 +9,7 @@ Installation
     $ pip install state_chain
 
 The version of :py:mod:`state_chain` documented here has been `tested`_ against
-Python 2.7, 3.4, and 3.5 on Ubuntu.
+Python 3.6, 3.7 and 3.8 on Ubuntu.
 
 :py:mod:`state_chain` is MIT-licensed.
 
@@ -152,9 +152,7 @@ API Reference
 -------------
 
 """
-from __future__ import absolute_import, division, print_function, unicode_literals
 
-import collections
 import opcode
 import sys
 import types
@@ -163,16 +161,6 @@ from dependency_injection import get_signature, resolve_dependencies
 
 
 __version__ = '1.3.0-dev'
-PYTHON_2 = sys.version_info < (3, 0, 0)
-
-
-if PYTHON_2:
-    def exec_(some_python, namespace):
-        # Have to double-exec because the Python 2 form is SyntaxError in 3.
-        exec("exec some_python in namespace")
-else:
-    def exec_(some_python, namespace):
-        exec(some_python, namespace)
 
 
 class FunctionNotFound(KeyError):
@@ -192,7 +180,7 @@ def _iter_with_previous(iterable):
         prev = o
 
 
-class StateChain(object):
+class StateChain:
     """Model an algorithm as a list of functions operating on a shared state
     dictionary.
 
@@ -210,18 +198,14 @@ class StateChain(object):
 
     """
 
-    functions = None        #: A list of functions comprising the algorithm.
-    default_raise_immediately = False
-
     START = -1
     END = -2
 
-
     def __init__(self, *functions, **kw):
         self.default_raise_immediately = kw.pop('raise_immediately', False)
-        if functions:
-            if not isinstance(functions[0], collections.Callable):
-                raise TypeError("Not a function: {0}".format(repr(functions[0])))
+        for f in functions:
+            if not callable(f):
+                raise TypeError("Not a function: {0}".format(repr(f)))
         self.functions = list(functions)
         self._signatures = {}
         self.debug = _DebugMethod(self)
@@ -266,9 +250,7 @@ class StateChain(object):
            handled.
 
          - You should return ``{'exception': None}`` to reset exception
-           handling. Under Python 2 we will call ``sys.exc_clear`` for you
-           (under Python 3 exceptions are cleared automatically at the end of
-           except blocks).
+           handling.
 
          - If an exception is raised by a function handling another exception,
            then ``exception`` is set to the new one and we look for the next
@@ -284,8 +266,7 @@ class StateChain(object):
 
          - When an exception occurs, the functions that accept an ``exception``
            argument will be called from inside the ``except:`` block, so you
-           can access ``sys.exc_info`` (which contains the traceback) even
-           under Python 3.
+           can access ``sys.exc_info`` (which contains the traceback).
 
         """
 
@@ -330,8 +311,6 @@ class StateChain(object):
                             state.update(new_state)
                         if in_except and state['exception'] is None:
                             # exception is cleared, return to normal flow
-                            if PYTHON_2:
-                                sys.exc_clear()
                             return
                 except:
                     if _raise_immediately:
@@ -350,7 +329,6 @@ class StateChain(object):
 
         return state
 
-
     def __getitem__(self, name):
         """Return the function in the :py:attr:`functions` list named ``name``, or raise
         :py:exc:`FunctionNotFound`.
@@ -362,7 +340,7 @@ class StateChain(object):
         >>> algo['bar']
         Traceback (most recent call last):
           ...
-        FunctionNotFound: The function 'bar' isn't in this state chain.
+        state_chain.FunctionNotFound: The function 'bar' isn't in this state chain.
 
         """
         func = None
@@ -374,12 +352,10 @@ class StateChain(object):
             raise FunctionNotFound(name)
         return func
 
-
     def get_names(self):
         """Returns a list of the names of the functions in the :py:attr:`functions` list.
         """
         return [f.__name__ for f in self.functions]
-
 
     def insert_before(self, name, *newfuncs):
         """Insert ``newfuncs`` in the :py:attr:`functions` list before the function named
@@ -414,7 +390,6 @@ class StateChain(object):
             i = self.functions.index(self[name])
         self.functions[i:i] = newfuncs
 
-
     def insert_after(self, name, *newfuncs):
         """Insert ``newfuncs`` in the :py:attr:`functions` list after the function named
         ``name``, or raise :py:exc:`FunctionNotFound`.
@@ -447,7 +422,6 @@ class StateChain(object):
             i = self.functions.index(self[name]) + 1
         self.functions[i:i] = newfuncs
 
-
     def remove(self, *names):
         """Remove the functions named ``name`` from the :py:attr:`functions` list, or raise
         :py:exc:`FunctionNotFound`.
@@ -455,7 +429,6 @@ class StateChain(object):
         for name in names:
             func = self[name]
             self.functions.remove(func)
-
 
     @classmethod
     def from_dotted_name(cls, dotted_name, **kw):
@@ -500,7 +473,6 @@ class StateChain(object):
         module = cls._load_module_from_dotted_name(dotted_name)
         functions = cls._load_functions_from_module(module)
         return cls(*functions, **kw)
-
 
     def debug(self, function):
         """Given a function, return a copy of the function with a breakpoint
@@ -588,7 +560,6 @@ class StateChain(object):
         """
         raise NotImplementedError  # Should be overriden by _DebugMethod in constructor.
 
-
     # Helpers for loading from a file.
     # ================================
 
@@ -596,11 +567,10 @@ class StateChain(object):
     def _load_module_from_dotted_name(dotted_name):
         class RootModule(object): pass
         module = RootModule()  # let's us use getattr to traverse down
-        exec_('import {0}'.format(dotted_name), module.__dict__)
+        exec('import {0}'.format(dotted_name), module.__dict__)
         for name in dotted_name.split('.'):
             module = getattr(module, name)
         return module
-
 
     @staticmethod
     def _load_functions_from_module(module):
@@ -683,8 +653,6 @@ def debug(function):
     # Build bytecode for a set_trace call.
     # ====================================
 
-    NOARG = object()
-
     codes = ( ('LOAD_CONST', 0)
             , ('LOAD_CONST', None)
             , ('IMPORT_NAME', 'pdb')
@@ -692,7 +660,7 @@ def debug(function):
             , ('LOAD_GLOBAL', 'pdb')
             , ('LOAD_ATTR', 'set_trace')
             , ('CALL_FUNCTION', 0)
-            , ('POP_TOP', NOARG)
+            , ('POP_TOP', 0)
              )
 
     new_names = function.__code__.co_names
@@ -700,131 +668,98 @@ def debug(function):
     new_code = b''
     addr_pad = 0
 
-    if PYTHON_2:
-        _chr = chr
-    else:
-
-        # In Python 3 chr returns a str (== 2's unicode), not a bytes (== 2's
-        # str). However, the func_new constructor wants a bytes for both code
-        # and lnotab. We use latin-1 to encode these to bytes, per the docs:
-        #
-        #   The simplest method is to map the codepoints 0-255 to the bytes
-        #   0x0-0xff. This means that a string object that contains codepoints
-        #   above U+00FF can't be encoded with this method (which is called
-        #   'latin-1' or 'iso-8859-1').
-        #
-        #   http://docs.python.org/3/library/codecs.html#encodings-and-unicode
-
-        _chr = lambda x: chr(x).encode('latin-1')
-
     for name, arg in codes:
-
-        # This is the inverse of the subset of dis.disassemble needed to handle
-        # our use case.
-
-        addr_pad += 1
+        # Since Python 3.6, all instructions use exactly two bytes.
+        addr_pad += 2
         op = opcode.opmap[name]
-        new_code += _chr(op)
-        if op >= opcode.HAVE_ARGUMENT:
-            addr_pad += 2
-            if op in opcode.hasconst:
-                if arg not in new_consts:
-                    new_consts += (arg,)
-                val = new_consts.index(arg)
-            elif op in opcode.hasname:
-                if PYTHON_2:
-                    # In Python 3, func_new wants str (== unicode) for names.
-                    arg = arg.encode('ASCII')
-                if arg not in new_names:
-                    new_names += (arg,)
-                val = new_names.index(arg)
-            elif name == 'CALL_FUNCTION':
-                val = arg  # number of args
-            new_code += _chr(val) + _chr(0)
+        if op in opcode.hasconst:
+            if arg not in new_consts:
+                new_consts += (arg,)
+            arg = new_consts.index(arg)
+        elif op in opcode.hasname:
+            if arg not in new_names:
+                new_names += (arg,)
+            arg = new_names.index(arg)
+        if arg > 0xffffff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 24) & 0xff))
+        if arg > 0xffff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 16) & 0xff))
+        if arg > 0xff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 8) & 0xff))
+            arg &= 0xff
+        new_code += bytes((op, arg))
 
-
-    # Finish inserting our new bytecode in front of the old.
-    # ======================================================
+    # Insert our new bytecode in front of the old.
+    # ============================================
     # Loop over old_code and append it to new_code, fixing up absolute jump
-    # references along the way. Then fix up the line number table.
+    # references along the way. Adapted from `dis._unpack_opargs()`.
 
     old_code = function.__code__.co_code
     i = 0
-    n = len(old_code)
-    while i < n:
-        c = old_code[i]
-        if type(c) is int:
-            # In Python 3, index access on a bytestring returns an int.
-            c = _chr(c)
-        op = ord(c)
-        i += 1
-        new_code += c
-        if op >= opcode.HAVE_ARGUMENT:
-            if PYTHON_2:
-                oparg = ord(old_code[i]) + ord(old_code[i+1])*256
-            else:
-                oparg = old_code[i] + old_code[i+1]*256
-            if op in opcode.hasjabs:
-                oparg += addr_pad
-            i += 2
-            new_code += _chr(oparg) + _chr(0)
+    extended_arg = 0
+    for i in range(0, len(old_code), 2):
+        # In Python 3, index access on a bytestring returns an int.
+        op = old_code[i]
+        arg = old_code[i+1] | extended_arg
+        if op == opcode.EXTENDED_ARG:
+            extended_arg = arg << 8
+            continue
+        else:
+            extended_arg = 0
+        if op in opcode.hasjabs:
+            arg += addr_pad
+        if arg > 0xffffff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 24) & 0xff))
+        if arg > 0xffff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 16) & 0xff))
+        if arg > 0xff:
+            new_code += bytes((opcode.EXTENDED_ARG, (arg >> 8) & 0xff))
+            arg &= 0xff
+        new_code += bytes((op, arg))
+
+    # Fix up the line number table.
+    # =============================
+    # See https://github.com/python/cpython/blob/3.8/Objects/lnotab_notes.txt
 
     old = function.__code__.co_lnotab
-    new_lnotab = ( old[:2]
-                 + _chr( (ord(old[2]) if len(old) > 2 else 0)
-                       + addr_pad
-                        )
-                 + old[3:]
-                  )
-
+    new_lnotab = bytes((addr_pad, 0)) + old
 
     # Now construct new code and function objects.
     # ============================================
     # See Objects/codeobject.c in Python source.
 
-    common_args = ( function.__code__.co_nlocals
-                  , function.__code__.co_stacksize
-                  , function.__code__.co_flags
-
-                  , new_code
-                  , new_consts
-                  , new_names
-
-                  , function.__code__.co_varnames
-                  , function.__code__.co_filename
-                  , function.__code__.co_name
-                  , function.__code__.co_firstlineno
-
-                  , new_lnotab
-
-                  , function.__code__.co_freevars
-                  , function.__code__.co_cellvars
-                   )
-
-    if PYTHON_2:
-        new_code = type(function.__code__)(function.__code__.co_argcount, *common_args)
-        new_function = type(function)( new_code
-                                     , function.func_globals
-                                     , function.func_name
-                                     , function.func_defaults
-                                     , function.func_closure
-                                      )
+    if hasattr(function.__code__, 'replace'):
+        # Python >= 3.8
+        new_code = function.__code__.replace(
+            co_code=new_code,
+            co_consts=new_consts,
+            co_names=new_names,
+            co_lnotab=new_lnotab,
+        )
     else:
-        new_code = type(function.__code__)( function.__code__.co_argcount
-                                          , function.__code__.co_kwonlyargcount
-                                          , *common_args
-                                           )
-        new_function = type(function)( new_code
-                                     , function.__globals__
-                                     , function.__name__
-                                     , function.__defaults__
-                                     , function.__closure__
-                                      )
+        new_code = type(function.__code__)(
+            function.__code__.co_argcount,
+            function.__code__.co_kwonlyargcount,
+            function.__code__.co_nlocals,
+            function.__code__.co_stacksize,
+            function.__code__.co_flags,
+            new_code,
+            new_consts,
+            new_names,
+            function.__code__.co_varnames,
+            function.__code__.co_filename,
+            function.__code__.co_name,
+            function.__code__.co_firstlineno,
+            new_lnotab,
+            function.__code__.co_freevars,
+            function.__code__.co_cellvars,
+        )
+    new_function = type(function)(
+        new_code,
+        function.__globals__,
+        function.__name__,
+        function.__defaults__,
+        function.__closure__,
+    )
 
     return new_function
-
-
-if __name__ == '__main__':
-    import doctest
-    import sys
-    sys.exit(min(doctest.testmod()[0], 1))
