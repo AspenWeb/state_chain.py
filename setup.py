@@ -10,7 +10,7 @@ setup(
     long_description=open(join(dirname(__file__), 'README.rst')).read(),
     long_description_content_type='text/x-rst',
     url='https://state-chain-py.readthedocs.io/',
-    version='1.5.0.dev0',
+    version='2.0.dev0',
     py_modules=['state_chain'],
     classifiers=[
         'Development Status :: 5 - Production/Stable',

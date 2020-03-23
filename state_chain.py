@@ -184,7 +184,7 @@ from typing import (
 )
 
 
-__version__ = '1.5.0.dev0'
+__version__ = '2.0.dev0'
 
 
 if TYPE_CHECKING:
