@@ -318,7 +318,7 @@ class StateChain:
                         if in_except and state['exception'] is None:
                             # exception is cleared, return to normal flow
                             return
-                except:
+                except Exception:
                     if _raise_immediately:
                         raise
                     state['exception'] = sys.exc_info()[1]
