@@ -234,15 +234,12 @@ class IncompleteModification(Exception):
         )
 
 
-A = TypeVar('A')
-B = TypeVar('B')
+class _LoopState:
+    __slots__ = ('i', 'prev_func')
 
-
-def _iter_with_previous(iterable: Iterable[A], default: B) -> Iterable[Tuple[A, Union[A, B]]]:
-    prev: Union[A, B] = default
-    for o in iterable:
-        yield o, prev
-        prev = o
+    def __init__(self) -> None:
+        self.i: int = 0
+        self.prev_func: Optional[ChainFunction] = None
 
 
 class StateChain(Generic[State]):
@@ -353,12 +350,9 @@ class StateChain(Generic[State]):
         if not hasattr(state, 'exception'):
             state.exception = None
 
-        # The `for` loop in the `loop()` function below can be entered multiple
-        # times since that function calls itself when an exception is raised.
-        # If we looped over the `functions` list we'd be starting from the top
-        # at each exception, and that's not what we want, so we use an iterator
-        # instead to keep track of where we are in the state chain.
-        functions_iter = _iter_with_previous(self._functions, ('', ''))
+        functions = self._functions
+        j = len(functions)
+        loop_state = _LoopState()
 
         def loop(
             # The first two arguments are for mypy's benefit.
@@ -366,9 +360,13 @@ class StateChain(Generic[State]):
             return_after: Optional[ChainFunction],
             in_except: bool
         ) -> None:
-            for (function, exception_preference), (prev_func, _) in functions_iter:
-                if prev_func is return_after:
-                    break
+            while loop_state.i < j:
+                function, exception_preference = functions[loop_state.i]
+                loop_state.i += 1
+                if return_after:
+                    if loop_state.prev_func is return_after:
+                        break
+                    loop_state.prev_func = function
                 if in_except:
                     # Skip when function doesn't want exception but we have it.
                     if exception_preference == 'unwanted':
