@@ -176,17 +176,46 @@ API Reference
 from collections import OrderedDict
 from functools import partial
 import opcode
+import sys
+from types import CodeType, FunctionType
+from typing import (
+    cast, Any, Callable, Generic, Iterable, List, Optional, Tuple,
+    TYPE_CHECKING, Type, TypeVar, Union
+)
 
 
 __version__ = '1.5.0.dev0'
 
 
+if TYPE_CHECKING:
+    from typing_extensions import Literal, Protocol
+
+    ExceptionPref = Literal['unwanted', 'accepted', 'required']
+
+    class StateProtocol(Protocol):
+        """Typing protocol for the state objects of chains.
+        """
+        exception: Optional[Exception]
+
+else:
+    ExceptionPref = str
+    StateProtocol = None
+
+State = TypeVar('State', bound=StateProtocol)
+ChainFunction = Callable[[State], Any]
+ChainFunctionRef = Union[ChainFunction, str]
+
+
 class FunctionNotFound(KeyError):
-    """Used when a function is not found in a state_chain function list
+    """Used when a function is not found in a state chain function list
     (subclasses :exc:`KeyError`).
     """
-    def __str__(self):
-        return "The function '{0}' isn't in this state chain.".format(*self.args)
+
+    def __init__(self, func_name: str) -> None:
+        self.func_name = func_name
+
+    def __str__(self) -> str:
+        return "The function '%s' isn't in this state chain." % self.func_name
 
 
 class IncompleteModification(Exception):
@@ -194,24 +223,29 @@ class IncompleteModification(Exception):
     Raised by :class:`ChainModifier.end` when one or more functions from the
     original chain has neither been dropped nor added to the modified chain.
     """
-    def __str__(self):
+
+    def __init__(self, func_names: Iterable[str]) -> None:
+        self.func_names = func_names
+
+    def __str__(self) -> str:
         return (
             "The following functions have neither been dropped nor added to the "
-            "modified chain: %r" % self.args
+            "modified chain: %s" % ', '.join(self.func_names)
         )
 
 
-_NO_PREVIOUS = object()
+A = TypeVar('A')
+B = TypeVar('B')
 
 
-def _iter_with_previous(iterable):
-    prev = _NO_PREVIOUS
+def _iter_with_previous(iterable: Iterable[A], default: B) -> Iterable[Tuple[A, Union[A, B]]]:
+    prev: Union[A, B] = default
     for o in iterable:
         yield o, prev
         prev = o
 
 
-class StateChain:
+class StateChain(Generic[State]):
     """Model an algorithm as a list of functions operating on a shared state.
 
     :param type state_type: the type of the state object
@@ -225,17 +259,22 @@ class StateChain:
         '__dict__',
     )
 
-    def __init__(self, state_type, functions=(), raise_immediately=False):
+    def __init__(
+        self,
+        state_type: Type[State],
+        functions: Iterable[ChainFunction] = (),
+        raise_immediately: bool = False,
+    ):
         self.state_type = state_type
-        self._functions = ()
+        self._functions: Tuple[Tuple[ChainFunction, str], ...] = ()
         self.add(*functions)
         self.raise_immediately = raise_immediately
 
     @property
-    def functions(self):
+    def functions(self) -> Tuple[ChainFunction, ...]:
         return tuple(func for func, _ in self._functions)
 
-    def copy(self):
+    def copy(self) -> 'StateChain':
         """Returns a copy of this chain.
         """
         r = StateChain(self.state_type, raise_immediately=self.raise_immediately)
@@ -243,7 +282,12 @@ class StateChain:
         r.__dict__ = self.__dict__.copy()
         return r
 
-    def run(self, state=None, raise_immediately=None, return_after=None):
+    def run(
+        self,
+        state: Optional[State] = None,
+        raise_immediately: Optional[bool] = None,
+        return_after: Optional[str] = None,
+    ) -> State:
         """Run through the functions in the :attr:`functions` list.
 
         :param State state: the initial state object for this run of the chain
@@ -304,8 +348,7 @@ class StateChain:
         if raise_immediately is None:
             raise_immediately = self.raise_immediately
 
-        if return_after is not None:
-            return_after = self[return_after]
+        return_after = self[return_after] if return_after else None
 
         if not hasattr(state, 'exception'):
             state.exception = None
@@ -315,9 +358,14 @@ class StateChain:
         # If we looped over the `functions` list we'd be starting from the top
         # at each exception, and that's not what we want, so we use an iterator
         # instead to keep track of where we are in the state chain.
-        functions_iter = _iter_with_previous(self._functions)
+        functions_iter = _iter_with_previous(self._functions, ('', ''))
 
-        def loop(in_except):
+        def loop(
+            # The first two arguments are for mypy's benefit.
+            state: State,
+            return_after: Optional[ChainFunction],
+            in_except: bool
+        ) -> None:
             for (function, exception_preference), (prev_func, _) in functions_iter:
                 if prev_func is return_after:
                     break
@@ -338,25 +386,25 @@ class StateChain:
                     if raise_immediately:
                         raise
                     state.exception = e
-                    loop(True)
+                    loop(state, return_after, True)
                     if in_except:
                         # an exception occurred while we were handling another
                         # exception, but now it's been cleared, so we return to
                         # the normal flow
                         return
-            if in_except:
+            if state.exception:
                 raise state.exception  # exception hasn't been handled, reraise
 
-        loop(state.exception is not None)
+        loop(state, return_after, state.exception is not None)
 
         return state
 
-    def __contains__(self, func_ref):
+    def __contains__(self, func_ref: ChainFunctionRef) -> bool:
         if isinstance(func_ref, str):
             return func_ref in self.get_names()
         return any(func_ref is func for func, _ in self._functions)
 
-    def __getitem__(self, name):
+    def __getitem__(self, name: str) -> ChainFunction:
         """Return the function in the :attr:`functions` list named ``name``, or raise
         :exc:`FunctionNotFound`.
 
@@ -376,12 +424,17 @@ class StateChain:
                 return candidate
         raise FunctionNotFound(name)
 
-    def get_names(self):
+    def get_names(self) -> List[str]:
         """Returns a list of the names of the functions in the :attr:`functions` list.
         """
         return [f.__name__ for f in self.functions]
 
-    def add(self, *funcs, position=None, exception='unwanted'):
+    def add(
+        self,
+        *funcs: ChainFunction,
+        position: Optional[int] = None,
+        exception: ExceptionPref = 'unwanted',
+    ) -> Optional[ChainFunction]:
         """Insert functions into the chain.
 
         :param funcs: the function(s) to add to the chain
@@ -436,18 +489,20 @@ class StateChain:
             )
         if len(funcs) == 1:
             return funcs[0]
+        else:
+            return None  # for mypy
 
-    def after(self, func_name):
+    def after(self, func_name: str) -> int:
         """Returns the chain position immediately after the function named `func_name`.
         """
         return self.functions.index(self[func_name]) + 1
 
-    def before(self, func_name):
+    def before(self, func_name: str) -> int:
         """Returns the position of the function named `func_name` in this chain.
         """
         return self.functions.index(self[func_name])
 
-    def remove(self, *names):
+    def remove(self, *names: str) -> None:
         """Remove the functions named ``name`` from the chain.
 
         :raises: :exc:`FunctionNotFound` if a name isn't found in the chain.
@@ -456,15 +511,15 @@ class StateChain:
         funcs = set(self[name] for name in names)
         self._functions = tuple(t for t in self._functions if t[0] not in funcs)
 
-    def modify(self):
+    def modify(self, new_state_type: Optional[Type[State]] = None) -> 'ChainModifier':
         """Returns a :class:`ChainModifier` object.
         """
-        return ChainModifier(self)
+        return ChainModifier(self, new_state_type)
 
-    def debug(self, function):
+    def debug(self, func_ref: ChainFunctionRef) -> ChainFunction:
         """Debug a specific function in the chain.
 
-        :param function: a function object or name
+        :param func_ref: a function object or name
 
         :raises: :exc:`FunctionNotFound` if the function isn't in this chain
 
@@ -494,12 +549,16 @@ class StateChain:
         (Pdb)
 
         """
-        if isinstance(function, str):
-            function = self[function]
+        if isinstance(func_ref, str):
+            function = self[func_ref]
+        elif callable(func_ref):
+            function = func_ref
+        else:
+            raise TypeError("expected str or function, got %r" % type(func_ref))
         try:
             i = self.functions.index(function)
         except ValueError:
-            raise FunctionNotFound(function)
+            raise FunctionNotFound(function.__name__)
         debugging_function = debug(function)
         self._functions = (
             self._functions[:i] +
@@ -519,12 +578,17 @@ class ChainModifier:
 
     __slots__ = ('new_chain', 'old_functions')
 
-    def __init__(self, chain):
-        self.new_chain = StateChain(chain.state_type, raise_immediately=chain.raise_immediately)
+    def __init__(self, chain: StateChain, new_state_type: Optional[Type[State]] = None):
+        new_state_type = new_state_type or chain.state_type
+        self.new_chain = StateChain(new_state_type, raise_immediately=chain.raise_immediately)
         self.new_chain.__dict__ = chain.__dict__
         self.old_functions = OrderedDict((f.__name__, f) for f in chain.functions)
 
-    def add(self, func_ref, exception='unwanted'):
+    def add(
+        self,
+        func_ref: ChainFunctionRef,
+        exception: ExceptionPref = 'unwanted',
+    ) -> 'ChainModifier':
         """Append a function to the modified chain.
 
         :param func_ref: the function to add, either a function object or the name
@@ -549,7 +613,11 @@ class ChainModifier:
         self.old_functions.pop(func.__name__, None)
         return self
 
-    def debug(self, func_ref, exception='unwanted'):
+    def debug(
+        self,
+        func_ref: ChainFunctionRef,
+        exception: ExceptionPref = 'unwanted',
+    ) -> 'ChainModifier':
         """Same as :meth:`add`, but wraps the chain function with :func:`debug`.
         """
         self.add(func_ref, exception=exception)
@@ -557,7 +625,7 @@ class ChainModifier:
         self.new_chain.debug(func)
         return self
 
-    def drop(self, func_name):
+    def drop(self, func_name: str) -> 'ChainModifier':
         """Skip a function present in the original chain.
         """
         try:
@@ -566,18 +634,22 @@ class ChainModifier:
             raise FunctionNotFound(func_name)
         return self
 
-    def end(self):
+    def end(self) -> StateChain:
         """Returns the modified copy of the original chain.
         """
         if self.old_functions:
-            raise IncompleteModification(list(self.old_functions.values()))
+            raise IncompleteModification(
+                [f.__name__ for f in self.old_functions.values()]
+            )
         return self.new_chain
 
 
 # Debugging Helpers
 # =================
 
-def debug(function):
+Func = TypeVar('Func', bound=Callable)
+
+def debug(function: Func) -> Func:
     """Given a function, return a copy of the function with a breakpoint
     immediately inside it.
 
@@ -615,6 +687,8 @@ def debug(function):
 
     """
 
+    function = cast(FunctionType, function)
+
     # Build bytecode for a set_trace call.
     # ====================================
 
@@ -634,18 +708,22 @@ def debug(function):
     new_code = b''
     addr_pad = 0
 
-    for name, arg in codes:
+    for name, arg_obj in codes:
         # Since Python 3.6, all instructions use exactly two bytes.
         addr_pad += 2
         op = opcode.opmap[name]
         if op in opcode.hasconst:
-            if arg not in new_consts:
-                new_consts += (arg,)
-            arg = new_consts.index(arg)
+            if arg_obj not in new_consts:
+                new_consts += (arg_obj,)
+            arg = new_consts.index(arg_obj)
         elif op in opcode.hasname:
-            if arg not in new_names:
-                new_names += (arg,)
-            arg = new_names.index(arg)
+            if arg_obj not in new_names:
+                new_names += (arg_obj,)
+            arg = new_names.index(arg_obj)
+        elif isinstance(arg_obj, int):
+            arg = arg_obj
+        else:
+            raise TypeError(type(arg_obj))
         if arg > 0xffffff:
             new_code += bytes((opcode.EXTENDED_ARG, (arg >> 24) & 0xff))
         if arg > 0xffff:
@@ -694,16 +772,15 @@ def debug(function):
     # ============================================
     # See Objects/codeobject.c in Python source.
 
-    if hasattr(function.__code__, 'replace'):
-        # Python >= 3.8
-        new_code = function.__code__.replace(
+    if sys.version_info >= (3, 8):
+        new_code_object = function.__code__.replace(
             co_code=new_code,
             co_consts=new_consts,
             co_names=new_names,
             co_lnotab=new_lnotab,
         )
     else:
-        new_code = type(function.__code__)(
+        new_code_object = CodeType(
             function.__code__.co_argcount,
             function.__code__.co_kwonlyargcount,
             function.__code__.co_nlocals,
@@ -720,12 +797,12 @@ def debug(function):
             function.__code__.co_freevars,
             function.__code__.co_cellvars,
         )
-    new_function = type(function)(
-        new_code,
+    new_function = FunctionType(
+        new_code_object,
         function.__globals__,
         function.__name__,
         function.__defaults__,
         function.__closure__,
     )
 
-    return new_function
+    return cast(Func, new_function)
