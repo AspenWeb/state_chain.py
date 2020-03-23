@@ -6,7 +6,7 @@ setup( name='state_chain'
      , author_email='team@aspen.io'
      , description="Model algorithms as a list of functions operating on a shared state dict."
      , url='https://state-chain-py.readthedocs.io/'
-     , version='1.3.0-dev'
+     , version='1.4.0'
      , py_modules=['state_chain']
      , install_requires=['dependency_injection >= 1.2.0']
      , classifiers=[ 'Development Status :: 5 - Production/Stable'
