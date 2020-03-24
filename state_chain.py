@@ -83,7 +83,7 @@ Let's define two more functions to add to the state chain:
 
     >>> def uh_oh(state: State):
     ...     if state.x == 0:
-    ...         raise heck
+    ...         raise Exception('oops, state.x is zero')
     ...
     >>> def deal_with_it(state: State):
     ...     print("I am dealing with it!")
@@ -168,6 +168,47 @@ the end:
     7
 
 
+If we remove the ``deal_with_it`` function, then the exception isn't handled, so
+it's reraised at the end of the chain:
+
+    >>> chain.remove('deal_with_it')
+    >>> chain.run()
+    Traceback (most recent call last):
+        ...
+    Exception: oops, state.x is zero
+
+
+Whether a function is skipped or called is determined by its "exception
+preference" (the value of the `exception` argument of the :meth:`StateChain.add`
+method). If it's 'unwanted', then the function will be skipped when an exception
+has been raised. If it's 'accepted', then the function will always be called. If
+it's 'required', then the function will only be called when an exception has
+been raised.
+
+The default value is 'unwanted', but you can change it when creating the chain:
+
+    >>> chain = StateChain(State, exception_preference='accepted')
+
+
+In that case, the chain's functions are always called, unless they were
+explicitly added with a different exception preference:
+
+    >>> chain.add(uh_oh)
+    <function uh_oh at ...>
+    >>> @chain.add(exception='unwanted')
+    ... def skipped(state):
+    ...     raise Exception("this function should not be called")
+    ...
+    >>> @chain.add
+    ... def always_called(state):
+    ...     state.x = -1
+    ...     state.exception = None
+    ...
+    >>> state = chain.run()
+    >>> state.x
+    -1
+
+
 API Reference
 -------------
 
@@ -247,12 +288,15 @@ class StateChain(Generic[State]):
 
     :param type state_type: the type of the state object
     :param functions: a sequence of functions in the order they are to be run
-    :param bool raise_immediately: whether to re-raise exceptions immediately
+    :param bool raise_immediately: default value for the `raise_immediately`
+        argument of the :meth:`run` method
+    :param str exception_preference: default value for the `exception` argument
+        of the :meth:`add` method
 
     """
 
     __slots__ = (
-        'state_type', 'raise_immediately', '_functions',
+        'state_type', 'raise_immediately', 'exception_preference', '_functions',
         '__dict__',
     )
 
@@ -261,8 +305,10 @@ class StateChain(Generic[State]):
         state_type: Type[State],
         functions: Iterable[ChainFunction] = (),
         raise_immediately: bool = False,
+        exception_preference: ExceptionPref = 'unwanted',
     ):
         self.state_type = state_type
+        self.exception_preference = exception_preference
         self._functions: Tuple[Tuple[ChainFunction, str], ...] = ()
         self.add(*functions)
         self.raise_immediately = raise_immediately
@@ -431,7 +477,7 @@ class StateChain(Generic[State]):
         self,
         *funcs: ChainFunction,
         position: Optional[int] = None,
-        exception: ExceptionPref = 'unwanted',
+        exception: Optional[ExceptionPref] = None,
     ) -> Optional[ChainFunction]:
         """Insert functions into the chain.
 
@@ -478,6 +524,7 @@ class StateChain(Generic[State]):
         for f in funcs:
             if not callable(f):
                 raise TypeError("Not a function: " + repr(f))
+        exception = exception or self.exception_preference
         func_tuples = tuple((f, exception) for f in funcs)
         if position is None:
             self._functions += func_tuples
@@ -585,7 +632,7 @@ class ChainModifier:
     def add(
         self,
         func_ref: ChainFunctionRef,
-        exception: ExceptionPref = 'unwanted',
+        exception: Optional[ExceptionPref] = None,
     ) -> 'ChainModifier':
         """Append a function to the modified chain.
 
@@ -614,7 +661,7 @@ class ChainModifier:
     def debug(
         self,
         func_ref: ChainFunctionRef,
-        exception: ExceptionPref = 'unwanted',
+        exception: Optional[ExceptionPref] = None,
     ) -> 'ChainModifier':
         """Same as :meth:`add`, but wraps the chain function with :func:`debug`.
         """
