@@ -245,6 +245,24 @@ Argument injection is implemented in the :func:`call` function and relies on the
 standard library function :func:`inspect.signature` introduced in Python 3.3.
 
 
+Aliases
++++++++
+
+If you're building a state chain that is meant to be used and modified by other
+programs, it can be useful to give friendly and stable aliases to some of your
+chain's functions.
+
+    >>> temp_chain = StateChain(State)
+    >>> temp_chain.add(set_y, alias='y_is_available')
+    <function set_y ...>
+
+This makes it easy to insert a function before or after a specific function is
+run, even if that function is later renamed.
+
+    >>> temp_chain.add(print_state, position=temp_chain.after('y_is_available'))
+    <function print_state ...>
+
+
 API Reference
 -------------
 
@@ -257,7 +275,7 @@ import opcode
 import sys
 from types import CodeType, FunctionType
 from typing import (
-    cast, Any, Callable, Generic, Iterable, List, NamedTuple, NoReturn,
+    cast, Any, Callable, Dict, Generic, Iterable, List, NamedTuple, NoReturn,
     Optional, Tuple, TYPE_CHECKING, Type, TypeVar, Union
 )
 
@@ -296,6 +314,19 @@ class FunctionNotFound(KeyError):
 
     def __str__(self) -> str:
         return "The function '%s' isn't in this state chain." % self.func_name
+
+
+class FunctionHasMultiplePositions(LookupError):
+    """
+    Raised by :meth:`StateChain.after` and :meth:`StateChain.before` when the
+    function is found multiple times in the state chain.
+    """
+
+    def __init__(self, func_name: str) -> None:
+        self.func_name = func_name
+
+    def __str__(self) -> str:
+        return "The function '%s' appears multiple times in this chain." % self.func_name
 
 
 class IncompleteModification(Exception):
@@ -347,6 +378,18 @@ class _ChainLink(NamedTuple):
     signature: Optional[Signature]
 
 
+class _FunctionMapValue:
+
+    __slots__ = ('function', 'position')
+
+    def __init__(self, function: ChainFunction, position: Optional[int]):
+        self.function = function
+        self.position = position
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.function!r}, {self.position!r})"
+
+
 class StateChain(Generic[State]):
     """Model an algorithm as a list of functions operating on a shared state.
 
@@ -361,7 +404,7 @@ class StateChain(Generic[State]):
 
     __slots__ = (
         'state_type', 'raise_immediately', 'exception_preference', '_functions',
-        '__dict__',
+        '_functions_map', '__dict__',
     )
 
     def __init__(
@@ -374,6 +417,7 @@ class StateChain(Generic[State]):
         self.state_type = state_type
         self.exception_preference = exception_preference
         self._functions: Tuple[_ChainLink, ...] = ()
+        self._functions_map: Dict[str, _FunctionMapValue] = {}
         self.add(*functions)
         self.raise_immediately = raise_immediately
 
@@ -393,6 +437,7 @@ class StateChain(Generic[State]):
         """
         r = StateChain(self.state_type, raise_immediately=self.raise_immediately)
         r._functions = self._functions
+        r._functions_map = self._functions_map.copy()
         r.__dict__ = self.__dict__.copy()
         return r
 
@@ -519,8 +564,11 @@ class StateChain(Generic[State]):
 
     def __contains__(self, func_ref: ChainFunctionRef) -> bool:
         if isinstance(func_ref, str):
-            return func_ref in self.get_names()
-        return any(func_ref is link.function for link in self._functions)
+            return func_ref in self._functions_map
+        try:
+            return self._functions_map[func_ref.__name__].function is func_ref
+        except KeyError:
+            return False
 
     def __getitem__(self, name: str) -> ChainFunction:
         """Return the function in the :attr:`functions` list named ``name``, or raise
@@ -537,10 +585,10 @@ class StateChain(Generic[State]):
         state_chain.FunctionNotFound: The function 'bar' isn't in this state chain.
 
         """
-        for candidate in self.functions:
-            if candidate.__name__ == name:
-                return candidate
-        raise FunctionNotFound(name)
+        v = self._functions_map.get(name)
+        if v is None:
+            raise FunctionNotFound(name)
+        return v.function
 
     def get_names(self) -> List[str]:
         """Returns a list of the names of the functions in the :attr:`functions` list.
@@ -552,17 +600,19 @@ class StateChain(Generic[State]):
         *funcs: ChainFunction,
         position: Optional[int] = None,
         exception: Optional[ExceptionPref] = None,
+        alias: Optional[str] = None,
     ) -> Optional[ChainFunction]:
         """Insert functions into the chain.
 
         :param funcs: the function(s) to add to the chain
-
         :param int position: where to insert the function in the chain
-
         :param str exception: determines when this function will be run or skipped.
             The valid values are: 'unwanted', 'accepted', and 'required'.
+        :param str alias: one or more alternative names for the function being added,
+            separated by whitespace
 
-        :raises: :exc:`TypeError` if an element of the ``funcs`` list isn't a callable
+        :raises: :exc:`TypeError` if an element of the ``funcs`` list isn't a callable,
+            or if the ``alias`` argument is provided when adding multiple functions
 
         >>> from types import SimpleNamespace
         >>> algo = StateChain(SimpleNamespace)
@@ -594,17 +644,41 @@ class StateChain(Generic[State]):
 
         """
         if not funcs:
-            return partial(self.add, position=position, exception=exception)
+            return partial(self.add, position=position, exception=exception, alias=alias)
         for f in funcs:
             if not callable(f):
                 raise TypeError("Not a function: " + repr(f))
         func_tuples = tuple(self._make_chain_link(f, exception) for f in funcs)
         if position is None:
+            position = len(self._functions)
             self._functions += func_tuples
         else:
+            after = self._functions[position:]
             self._functions = (
-                self._functions[:position] + func_tuples + self._functions[position:]
+                self._functions[:position] + func_tuples + after
             )
+            offset = len(funcs)
+            for link in after:
+                func_name = link.function.__name__
+                v = self._functions_map[func_name]
+                if v.position is not None:
+                    v.position += offset
+        if alias:
+            if len(funcs) == 1:
+                for a in alias.split():
+                    self._functions_map[a] = _FunctionMapValue(funcs[0], position)
+            else:
+                raise TypeError(
+                    "the `alias` argument is only allowed when adding a single "
+                    "function to the chain"
+                )
+        for func in funcs:
+            func_name = func.__name__
+            if func_name in self._functions_map:
+                self._functions_map[func_name].position = None
+            else:
+                self._functions_map[func_name] = _FunctionMapValue(func, position)
+            position += 1
         if len(funcs) == 1:
             return funcs[0]
         else:
@@ -633,13 +707,31 @@ class StateChain(Generic[State]):
 
     def after(self, func_name: str) -> int:
         """Returns the chain position immediately after the function named `func_name`.
+
+        :raises: :exc:`FunctionHasMultiplePositions` if the matching function
+            appears multiple times in this chain
+
         """
-        return self.functions.index(self[func_name]) + 1
+        v = self._functions_map.get(func_name)
+        if v is None:
+            raise FunctionNotFound(func_name)
+        if v.position is None:
+            raise FunctionHasMultiplePositions(func_name)
+        return v.position + 1
 
     def before(self, func_name: str) -> int:
         """Returns the position of the function named `func_name` in this chain.
+
+        :raises: :exc:`FunctionHasMultiplePositions` if the matching function
+            appears multiple times in this chain
+
         """
-        return self.functions.index(self[func_name])
+        v = self._functions_map.get(func_name)
+        if v is None:
+            raise FunctionNotFound(func_name)
+        if v.position is None:
+            raise FunctionHasMultiplePositions(func_name)
+        return v.position
 
     def remove(self, *names: str) -> None:
         """Remove the functions named ``name`` from the chain.
@@ -651,6 +743,22 @@ class StateChain(Generic[State]):
         self._functions = tuple(
             link for link in self._functions if link.function not in funcs
         )
+        aliases = [
+            (k, v.function.__name__)
+            for k, v in self._functions_map.items()
+            if k != v.function.__name__
+        ]
+        new_functions_map: Dict[str, _FunctionMapValue] = {}
+        for i, link in enumerate(self._functions):
+            func = link.function
+            v = new_functions_map.get(func.__name__)
+            if v is None:
+                new_functions_map[func.__name__] = _FunctionMapValue(func, i)
+            else:
+                v.position = None
+        for alias, func_name in aliases:
+            new_functions_map[alias] = new_functions_map[func_name]
+        self._functions_map = new_functions_map
 
     def modify(self, new_state_type: Optional[Type[State]] = None) -> 'ChainModifier':
         """Returns a :class:`ChainModifier` object.
@@ -717,7 +825,7 @@ class ChainModifier:
 
     """
 
-    __slots__ = ('new_chain', 'old_functions', 'old_exception_prefs')
+    __slots__ = ('new_chain', 'old_functions', 'old_exception_prefs', 'old_aliases')
 
     def __init__(self, chain: StateChain, new_state_type: Optional[Type[State]] = None):
         new_state_type = new_state_type or chain.state_type
@@ -727,11 +835,21 @@ class ChainModifier:
         self.old_exception_prefs = {
             link.function.__name__: link.exception_pref for link in chain._functions
         }
+        aliases: Dict[str, str] = {}
+        for k, v in chain._functions_map.items():
+            func_name = v.function.__name__
+            if k != func_name:
+                if func_name in aliases:
+                    aliases[func_name] += ' ' + k
+                else:
+                    aliases[func_name] = k
+        self.old_aliases = aliases
 
     def add(
         self,
         func_ref: ChainFunctionRef,
         exception: Optional[ExceptionPref] = None,
+        alias: Optional[str] = None,
     ) -> 'ChainModifier':
         """Append a function to the modified chain.
 
@@ -753,7 +871,7 @@ class ChainModifier:
             func = func_ref
         else:
             raise TypeError("expected a string or function, got " + repr(type(func_ref)))
-        self.new_chain.add(func, exception=exception)
+        self.new_chain.add(func, exception=exception, alias=alias)
         self.old_functions.pop(func.__name__, None)
         return self
 
@@ -764,6 +882,8 @@ class ChainModifier:
             self.old_functions.pop(func_name)
         except KeyError:
             raise FunctionNotFound(func_name)
+        self.old_exception_prefs.pop(func_name)
+        self.old_aliases.pop(func_name, None)
         return self
 
     def end(self) -> StateChain:
@@ -776,13 +896,17 @@ class ChainModifier:
         return self.new_chain
 
     def keep(self, func_name: str) -> 'ChainModifier':
-        """Add a function from the original chain, preserving the exception preference.
+        """Add a function from the original chain.
+
+        This method copies the function's exception preference and aliases from
+        the original chain.
         """
         try:
             exception_pref = self.old_exception_prefs[func_name]
         except KeyError:
             raise FunctionNotFound(func_name)
-        self.add(func_name, exception_pref)
+        alias = self.old_aliases.get(func_name, None)
+        self.add(func_name, exception_pref, alias)
         return self
 
     def replace(
@@ -790,13 +914,21 @@ class ChainModifier:
         func_name: str,
         new_func_ref: ChainFunctionRef,
         exception: Optional[ExceptionPref] = None,
+        alias: Optional[str] = None,
     ) -> 'ChainModifier':
         """Replace a function present in the original chain.
 
-        This is equivalent to calling :func:`drop` and then :func:`add`.
+        This method copies the function's exception preference and aliases from
+        the original chain, unless you provide new values. You can pass the
+        empty string as the `alias` argument to disable copying the old aliases
+        without adding a new one.
         """
+        if exception is None:
+            exception = self.old_exception_prefs.get(func_name)
+        if alias is None:
+            alias = self.old_aliases.get(func_name, None)
         self.drop(func_name)
-        self.add(new_func_ref, exception)
+        self.add(new_func_ref, exception, alias)
         return self
 
 
