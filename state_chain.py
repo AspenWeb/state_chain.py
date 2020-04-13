@@ -220,8 +220,8 @@ import opcode
 import sys
 from types import CodeType, FunctionType
 from typing import (
-    cast, Any, Callable, Generic, Iterable, List, Optional, Tuple,
-    TYPE_CHECKING, Type, TypeVar, Union
+    cast, Any, Callable, Generic, Iterable, List, NoReturn, Optional,
+    Tuple, TYPE_CHECKING, Type, TypeVar, Union
 )
 
 
@@ -316,6 +316,13 @@ class StateChain(Generic[State]):
     @property
     def functions(self) -> Tuple[ChainFunction, ...]:
         return tuple(func for func, _ in self._functions)
+
+    @functions.setter
+    def functions(self, new_list: Any) -> NoReturn:
+        raise AttributeError(
+            "You should use the `modify()` method to customize a state chain. "
+            "See https://state-chain-py.readthedocs.io/ for details."
+        )
 
     def copy(self) -> 'StateChain':
         """Returns a copy of this chain.
