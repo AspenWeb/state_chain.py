@@ -214,6 +214,37 @@ explicitly added with a different exception preference:
     -1
 
 
+Argument Injection
+++++++++++++++++++
+
+So far we've only used chain functions that expect the state object as their
+only argument, but the `run` method can also automatically pass the value of
+any attribute of the state object to a function as an argument.
+
+For example:
+
+    >>> def print_sum(x, y):
+    ...     print(f"x + y = {x + y}")
+    ...
+    >>> chain = StateChain(State, functions=[set_x, set_y, print_sum])
+    >>> _ = chain.run()
+    x + y = 3
+
+If a chain function has an `exception` argument, then its default exception
+preference is 'accepted' if the argument is optional (e.g. `exception=None`),
+and 'required' otherwise.
+
+    >>> def exception_handler(foo, exception):
+    ...     "This function's default exception preference is 'required'"
+    ...
+    >>> def exception_tolerant_function(foo, exception=None):
+    ...     "This function's default exception preference is 'accepted'"
+    ...
+
+Argument injection is implemented in the :func:`call` function and relies on the
+standard library function :func:`inspect.signature` introduced in Python 3.3.
+
+
 API Reference
 -------------
 
@@ -221,12 +252,13 @@ API Reference
 
 from collections import OrderedDict
 from functools import partial
+from inspect import Parameter, Signature, signature
 import opcode
 import sys
 from types import CodeType, FunctionType
 from typing import (
-    cast, Any, Callable, Generic, Iterable, List, NoReturn, Optional,
-    Tuple, TYPE_CHECKING, Type, TypeVar, Union
+    cast, Any, Callable, Generic, Iterable, List, NamedTuple, NoReturn,
+    Optional, Tuple, TYPE_CHECKING, Type, TypeVar, Union
 )
 
 
@@ -248,8 +280,10 @@ else:
     StateProtocol = None
 
 State = TypeVar('State', bound=StateProtocol)
-ChainFunction = Callable[[State], Any]
+ChainFunction = Callable
 ChainFunctionRef = Union[ChainFunction, str]
+Func = TypeVar('Func', bound=Callable)
+T = TypeVar('T')
 
 
 class FunctionNotFound(KeyError):
@@ -280,12 +314,37 @@ class IncompleteModification(Exception):
         )
 
 
+class StateLookupError(Exception):
+    """
+    Raised by :func:`call` when one or more of a chain function's arguments
+    aren't available in the state.
+    """
+
+    def __init__(self, function: Callable, missing_arguments: List[str]) -> None:
+        self.function = function
+        self.missing_arguments = missing_arguments
+
+    def __str__(self) -> str:
+        missing = self.missing_arguments
+        return (
+            f"{self.function.__name__}() missing {len(missing)} required "
+            f"argument{'s' if len(missing) != 1 else ''}: "
+            f"{', '.join(map(repr, missing))}"
+        )
+
+
 class _LoopState:
     __slots__ = ('i', 'prev_func')
 
     def __init__(self) -> None:
         self.i: int = 0
         self.prev_func: Optional[ChainFunction] = None
+
+
+class _ChainLink(NamedTuple):
+    function: ChainFunction
+    exception_pref: ExceptionPref
+    signature: Optional[Signature]
 
 
 class StateChain(Generic[State]):
@@ -314,13 +373,13 @@ class StateChain(Generic[State]):
     ):
         self.state_type = state_type
         self.exception_preference = exception_preference
-        self._functions: Tuple[Tuple[ChainFunction, str], ...] = ()
+        self._functions: Tuple[_ChainLink, ...] = ()
         self.add(*functions)
         self.raise_immediately = raise_immediately
 
     @property
     def functions(self) -> Tuple[ChainFunction, ...]:
-        return tuple(func for func, _ in self._functions)
+        return tuple(link.function for link in self._functions)
 
     @functions.setter
     def functions(self, new_list: Any) -> NoReturn:
@@ -419,7 +478,7 @@ class StateChain(Generic[State]):
             in_except: bool
         ) -> None:
             while loop_state.i < j:
-                function, exception_preference = functions[loop_state.i]
+                function, exception_pref, sig = functions[loop_state.i]
                 loop_state.i += 1
                 if return_after:
                     if loop_state.prev_func is return_after:
@@ -427,14 +486,17 @@ class StateChain(Generic[State]):
                     loop_state.prev_func = function
                 if in_except:
                     # Skip when function doesn't want exception but we have it.
-                    if exception_preference == 'unwanted':
+                    if exception_pref == 'unwanted':
                         continue
                 else:
                     # Skip when function wants exception but we don't have it.
-                    if exception_preference == 'required':
+                    if exception_pref == 'required':
                         continue
                 try:
-                    function(state)
+                    if sig:
+                        call(function, state, sig)
+                    else:
+                        function(state)
                     if in_except and state.exception is None:
                         # exception is cleared, return to normal flow
                         return
@@ -458,7 +520,7 @@ class StateChain(Generic[State]):
     def __contains__(self, func_ref: ChainFunctionRef) -> bool:
         if isinstance(func_ref, str):
             return func_ref in self.get_names()
-        return any(func_ref is func for func, _ in self._functions)
+        return any(func_ref is link.function for link in self._functions)
 
     def __getitem__(self, name: str) -> ChainFunction:
         """Return the function in the :attr:`functions` list named ``name``, or raise
@@ -536,8 +598,7 @@ class StateChain(Generic[State]):
         for f in funcs:
             if not callable(f):
                 raise TypeError("Not a function: " + repr(f))
-        exception = exception or self.exception_preference
-        func_tuples = tuple((f, exception) for f in funcs)
+        func_tuples = tuple(self._make_chain_link(f, exception) for f in funcs)
         if position is None:
             self._functions += func_tuples
         else:
@@ -548,6 +609,27 @@ class StateChain(Generic[State]):
             return funcs[0]
         else:
             return None  # for mypy
+
+    def _make_chain_link(
+        self,
+        function: ChainFunction,
+        exception: Optional[ExceptionPref],
+    ) -> _ChainLink:
+        sig = signature(function)
+        if len(sig.parameters) == 1 and 'state' in sig.parameters:
+            # This chain function takes the state object as its only argument,
+            # so we don't need to keep its signature.
+            return _ChainLink(function, exception or self.exception_preference, None)
+        else:
+            if not exception:
+                exception_param = sig.parameters.get('exception')
+                if exception_param is None:
+                    exception = self.exception_preference
+                elif exception_param.default is Parameter.empty:
+                    exception = 'required'
+                else:
+                    exception = 'accepted'
+            return _ChainLink(function, exception, sig)
 
     def after(self, func_name: str) -> int:
         """Returns the chain position immediately after the function named `func_name`.
@@ -566,7 +648,9 @@ class StateChain(Generic[State]):
 
         """
         funcs = set(self[name] for name in names)
-        self._functions = tuple(t for t in self._functions if t[0] not in funcs)
+        self._functions = tuple(
+            link for link in self._functions if link.function not in funcs
+        )
 
     def modify(self, new_state_type: Optional[Type[State]] = None) -> 'ChainModifier':
         """Returns a :class:`ChainModifier` object.
@@ -619,7 +703,7 @@ class StateChain(Generic[State]):
         debugging_function = debug(function)
         self._functions = (
             self._functions[:i] +
-            ((debugging_function, self._functions[i][1]),) +
+            (self._make_chain_link(debugging_function, self._functions[i].exception_pref),) +
             self._functions[i+1:]
         )
         return debugging_function
@@ -716,10 +800,39 @@ class ChainModifier:
         return self
 
 
-# Debugging Helpers
-# =================
+def call(
+    function: Callable[..., T],
+    state: Any,
+    function_signature: Optional[Signature] = None,
+) -> T:
+    """Call `function` with argument values taken from the attributes of the `state` object.
 
-Func = TypeVar('Func', bound=Callable)
+    :raises: :exc:`StateLookupError`, if a required argument isn't in the state
+    """
+    if function_signature is None:
+        function_signature = signature(function)
+    missing = None
+    args = []
+    kwargs = {}
+    for param in function_signature.parameters.values():
+        name, kind = param.name, param.kind
+        if hasattr(state, name) or name == 'state':
+            value = state if name == 'state' else getattr(state, name)
+            if kind in (kind.POSITIONAL_ONLY, kind.POSITIONAL_OR_KEYWORD):
+                args.append(value)
+            elif kind == kind.KEYWORD_ONLY:
+                kwargs[name] = value
+        elif param.default is Parameter.empty:
+            if kind in (kind.VAR_POSITIONAL, kind.VAR_KEYWORD):
+                pass
+            else:
+                if missing is None:
+                    missing = []
+                missing.append(name)
+    if missing:
+        raise StateLookupError(function, missing)
+    return function(*args, **kwargs)
+
 
 def debug(function: Func) -> Func:
     """Given a function, return a copy of the function with a breakpoint
