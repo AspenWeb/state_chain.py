@@ -4,7 +4,7 @@ import traceback
 from unittest.mock import patch
 
 from filesystem_tree import FilesystemTree
-from pytest import raises, yield_fixture
+from pytest import raises, fixture
 
 from state_chain import StateChain, FunctionNotFound, IncompleteModification
 
@@ -12,13 +12,13 @@ from state_chain import StateChain, FunctionNotFound, IncompleteModification
 # fixtures
 # ========
 
-@yield_fixture
+@fixture
 def fs():
     fs = FilesystemTree()
     yield fs
     fs.remove()
 
-@yield_fixture
+@fixture
 def module_scrubber():
     before = set(sys.modules.keys())
     yield
