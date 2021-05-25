@@ -9,7 +9,7 @@ Installation
     $ pip install state_chain
 
 The version of :mod:`state_chain` documented here has been `tested`_ against
-Python 3.6, 3.7 and 3.8 on Ubuntu.
+Python 3.6, 3.7, 3.8 and 3.9 on Ubuntu.
 
 :mod:`state_chain` is MIT-licensed.
 
