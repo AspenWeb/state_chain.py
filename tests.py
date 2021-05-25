@@ -65,9 +65,9 @@ def test_inserted_state_chain_steps_run():
 def test_modify_method():
     chain = (
         val_chain.copy().modify()
-        .debug('val1', exception='required')
+        .keep('val1')
         .drop('val2')
-        .add(val3, exception='accepted')
+        .replace('val3', val3, exception='accepted')
         .add(val4)
         .end()
     )

@@ -49,15 +49,15 @@ Then create a :class:`StateChain` object:
 And add some functions to it:
 
     >>> @chain.add
-    ... def foo(state: State):
+    ... def set_x(state: State):
     ...     state.x = 1
     ...
     >>> @chain.add
-    ... def bar(state: State):
+    ... def set_y(state: State):
     ...     state.y = 2
     ...
     >>> @chain.add
-    ... def bloo(state: State):
+    ... def set_sum(state: State):
     ...     state.sum = state.x + state.y
     ...
 
@@ -79,7 +79,7 @@ Okay, we have the expected sum!
 Modifying a State Chain
 +++++++++++++++++++++++
 
-Let's define two more functions to add to the state chain:
+Let's define three more functions to add to the state chain:
 
     >>> def uh_oh(state: State):
     ...     if state.x == 0:
@@ -89,6 +89,9 @@ Let's define two more functions to add to the state chain:
     ...     print("I am dealing with it!")
     ...     state.exception = None
     ...
+    >>> def print_state(state: State):
+    ...     print(state)
+    ...
 
 
 and make a copy of the chain that we'll use later:
@@ -97,28 +100,32 @@ and make a copy of the chain that we'll use later:
 
 
 Now let's interpolate the new functions into our state chain. Let's put the
-``uh_oh`` function between ``bar`` and ``bloo``:
+``uh_oh`` at the beginning:
 
-    >>> chain.add(uh_oh, position=chain.before('bloo'))
+    >>> chain.add(uh_oh, position=0)
     <function uh_oh ...>
     >>> chain.functions
-    (<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>)
+    (<function uh_oh ...>, <function set_x ...>, <function set_y ...>,
+     <function set_sum ...>)
 
 
-Then let's add our exception handler after ``bloo``:
+Then let's remove ``set_y`` and replace ``set_sum`` with ``print_state``:
 
-    >>> chain.add(deal_with_it, position=chain.after('bloo'), exception='required')
+    >>> chain.remove('set_y')
+    >>> chain.add(print_state, position=chain.before('set_sum'), exception='accepted')
+    <function print_state ...>
+    >>> chain.remove('set_sum')
+    >>> chain.functions
+    (<function uh_oh ...>, <function set_x ...>, <function print_state ...>)
+
+
+Finally, let's add our exception handler after ``print_state``:
+
+    >>> chain.add(deal_with_it, position=chain.after('print_state'), exception='required')
     <function deal_with_it ...>
     >>> chain.functions
-    (<function foo ...>, <function bar ...>, <function uh_oh ...>, <function bloo ...>,
+    (<function uh_oh ...>, <function set_x ...>, <function print_state ...>,
      <function deal_with_it ...>)
-
-
-Just for kicks, let's remove the ``foo`` function while we're at it:
-
-    >>> chain.remove('foo')
-    >>> chain.functions
-    (<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>)
 
 
 Note: when making extensive changes to a state chain, you can use the
@@ -127,15 +134,16 @@ We could have achieved the same result as above like so:
 
     >>> chain = (
     ...     chain_copy.modify()
-    ...     .drop('foo')
-    ...     .add('bar')
     ...     .add(uh_oh)
-    ...     .add('bloo')
+    ...     .keep('set_x')
+    ...     .drop('set_y')
+    ...     .replace('set_sum', print_state, exception='accepted')
     ...     .add(deal_with_it, exception='required')
     ...     .end()
     ... )
     >>> chain.functions
-    (<function bar ...>, <function uh_oh ...>, <function bloo ...>, <function deal_with_it ...>)
+    (<function uh_oh ...>, <function set_x ...>, <function print_state ...>,
+     <function deal_with_it ...>)
 
 
 This allows you to see exactly what your chain does and how it differs from the
@@ -144,6 +152,7 @@ original chain.
 Either way, what happens when we run it?
 
     >>> state = chain.run()
+    State(x=0, y=0, sum=0, exception=Exception('oops, state.x is zero'))
     I am dealing with it!
 
 
@@ -154,18 +163,14 @@ Whenever a function raises an exception, like ``uh_oh`` did in the example
 above, :class:`~StateChain.run` captures the exception and assigns it to
 ``state.exception``. As long as this state attribute is not ``None``, any normal
 function is skipped, and only exception handling functions get called. It's like
-a fast-forward. So in our example ``deal_with_it`` got called, but ``bloo``
-didn't, which is why ``sum`` is zero:
+a fast-forward. So in our example ``print_state`` and ``deal_with_it`` got
+called, but ``set_x`` didn't.
 
-    >>> state.sum
-    0
+If we run without triggering the exception in ``uh_oh``, then we have a
+different result:
 
-
-If we run without tripping the exception in ``uh_oh``, then we have the sum at
-the end:
-
-    >>> chain.run(State(x=5)).sum
-    7
+    >>> _ = chain.run(State(x=1, y=5))
+    State(x=1, y=5, sum=0, exception=None)
 
 
 If we remove the ``deal_with_it`` function, then the exception isn't handled, so
@@ -628,13 +633,16 @@ class ChainModifier:
 
     """
 
-    __slots__ = ('new_chain', 'old_functions')
+    __slots__ = ('new_chain', 'old_functions', 'old_exception_prefs')
 
     def __init__(self, chain: StateChain, new_state_type: Optional[Type[State]] = None):
         new_state_type = new_state_type or chain.state_type
         self.new_chain = StateChain(new_state_type, raise_immediately=chain.raise_immediately)
         self.new_chain.__dict__ = chain.__dict__
         self.old_functions = OrderedDict((f.__name__, f) for f in chain.functions)
+        self.old_exception_prefs = {
+            link.function.__name__: link.exception_pref for link in chain._functions
+        }
 
     def add(
         self,
@@ -665,18 +673,6 @@ class ChainModifier:
         self.old_functions.pop(func.__name__, None)
         return self
 
-    def debug(
-        self,
-        func_ref: ChainFunctionRef,
-        exception: Optional[ExceptionPref] = None,
-    ) -> 'ChainModifier':
-        """Same as :meth:`add`, but wraps the chain function with :func:`debug`.
-        """
-        self.add(func_ref, exception=exception)
-        func = self.new_chain.functions[-1]
-        self.new_chain.debug(func)
-        return self
-
     def drop(self, func_name: str) -> 'ChainModifier':
         """Skip a function present in the original chain.
         """
@@ -694,6 +690,30 @@ class ChainModifier:
                 [f.__name__ for f in self.old_functions.values()]
             )
         return self.new_chain
+
+    def keep(self, func_name: str) -> 'ChainModifier':
+        """Add a function from the original chain, preserving the exception preference.
+        """
+        try:
+            exception_pref = self.old_exception_prefs[func_name]
+        except KeyError:
+            raise FunctionNotFound(func_name)
+        self.add(func_name, exception_pref)
+        return self
+
+    def replace(
+        self,
+        func_name: str,
+        new_func_ref: ChainFunctionRef,
+        exception: Optional[ExceptionPref] = None,
+    ) -> 'ChainModifier':
+        """Replace a function present in the original chain.
+
+        This is equivalent to calling :func:`drop` and then :func:`add`.
+        """
+        self.drop(func_name)
+        self.add(new_func_ref, exception)
+        return self
 
 
 # Debugging Helpers
