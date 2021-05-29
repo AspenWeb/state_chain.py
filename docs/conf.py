@@ -89,6 +89,8 @@ primary_domain = 'py'
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
 
+# Show type hints in the detailed list of arguments, not in the signature.
+autodoc_typehints = 'description'
 
 # -- Options for HTML output ---------------------------------------------------
 

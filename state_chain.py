@@ -34,66 +34,6 @@ Func = TypeVar('Func', bound=Callable)
 T = TypeVar('T')
 
 
-class FunctionNotFound(KeyError):
-    """Used when a function is not found in a state chain function list
-    (subclasses :exc:`KeyError`).
-    """
-
-    def __init__(self, func_name: str) -> None:
-        self.func_name = func_name
-
-    def __str__(self) -> str:
-        return "The function '%s' isn't in this state chain." % self.func_name
-
-
-class FunctionHasMultiplePositions(LookupError):
-    """
-    Raised by :meth:`StateChain.after` and :meth:`StateChain.before` when the
-    function is found multiple times in the state chain.
-    """
-
-    def __init__(self, func_name: str) -> None:
-        self.func_name = func_name
-
-    def __str__(self) -> str:
-        return "The function '%s' appears multiple times in this chain." % self.func_name
-
-
-class IncompleteModification(Exception):
-    """
-    Raised by :class:`ChainModifier.end` when one or more functions from the
-    original chain has neither been dropped nor added to the modified chain.
-    """
-
-    def __init__(self, func_names: Iterable[str]) -> None:
-        self.func_names = func_names
-
-    def __str__(self) -> str:
-        return (
-            "The following functions have neither been dropped nor added to the "
-            "modified chain: %s" % ', '.join(self.func_names)
-        )
-
-
-class StateLookupError(Exception):
-    """
-    Raised by :func:`call` when one or more of a chain function's arguments
-    aren't available in the state.
-    """
-
-    def __init__(self, function: Callable, missing_arguments: List[str]) -> None:
-        self.function = function
-        self.missing_arguments = missing_arguments
-
-    def __str__(self) -> str:
-        missing = self.missing_arguments
-        return (
-            f"{self.function.__name__}() missing {len(missing)} required "
-            f"argument{'s' if len(missing) != 1 else ''}: "
-            f"{', '.join(map(repr, missing))}"
-        )
-
-
 class _LoopState:
     __slots__ = ('i', 'prev_func')
 
@@ -121,7 +61,8 @@ class _FunctionMapValue:
 
 
 class Object(SimpleNamespace):
-    """
+    """The default type of a chain's :obj:`state` object.
+
     A namespace that supports both attribute-style and dict-style lookups and
     assignments. This is similar to a JavaScript object, hence the name.
     """
@@ -327,9 +268,8 @@ class StateChain(Generic[State]):
         """Return the function in the :attr:`functions` list named ``name``, or raise
         :exc:`FunctionNotFound`.
 
-        >>> class State: pass
         >>> def foo(): pass
-        >>> algo = StateChain(State, functions=[foo])
+        >>> algo = StateChain(functions=[foo])
         >>> algo['foo'] is foo
         True
         >>> algo['bar']
@@ -570,6 +510,32 @@ class StateChain(Generic[State]):
         return debugging_function
 
 
+class FunctionHasMultiplePositions(LookupError):
+    """
+    Raised by :meth:`StateChain.after` and :meth:`StateChain.before` when the
+    function is found multiple times in the state chain.
+    """
+
+    def __init__(self, func_name: str) -> None:
+        self.func_name = func_name
+
+    def __str__(self) -> str:
+        return "The function '%s' appears multiple times in this chain." % self.func_name
+
+
+class FunctionNotFound(KeyError):
+    """
+    Raised when a function is not found in a state chain function list.
+    Subclass of :exc:`KeyError`.
+    """
+
+    def __init__(self, func_name: str) -> None:
+        self.func_name = func_name
+
+    def __str__(self) -> str:
+        return "The function '%s' isn't in this state chain." % self.func_name
+
+
 class ChainModifier:
     """This class facilitates the safe modification of a :class:`StateChain`.
 
@@ -685,6 +651,22 @@ class ChainModifier:
         return self
 
 
+class IncompleteModification(Exception):
+    """
+    Raised by :class:`ChainModifier.end` when one or more functions from the
+    original chain has neither been dropped nor added to the modified chain.
+    """
+
+    def __init__(self, func_names: Iterable[str]) -> None:
+        self.func_names = func_names
+
+    def __str__(self) -> str:
+        return (
+            "The following functions have neither been dropped nor added to the "
+            "modified chain: %s" % ', '.join(self.func_names)
+        )
+
+
 def call(
     function: Callable[..., T],
     state: Any,
@@ -717,6 +699,25 @@ def call(
     if missing:
         raise StateLookupError(function, missing)
     return function(*args, **kwargs)
+
+
+class StateLookupError(Exception):
+    """
+    Raised by :func:`call` when one or more of a chain function's arguments
+    aren't available in the state.
+    """
+
+    def __init__(self, function: Callable, missing_arguments: List[str]) -> None:
+        self.function = function
+        self.missing_arguments = missing_arguments
+
+    def __str__(self) -> str:
+        missing = self.missing_arguments
+        return (
+            f"{self.function.__name__}() missing {len(missing)} required "
+            f"argument{'s' if len(missing) != 1 else ''}: "
+            f"{', '.join(map(repr, missing))}"
+        )
 
 
 def debug(function: Func) -> Func:

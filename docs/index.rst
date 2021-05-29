@@ -290,8 +290,7 @@ API Reference
 .. automodule:: state_chain
     :members:
     :member-order: bysource
-    :special-members:
-    :exclude-members: __weakref__
+    :special-members: __contains__, __getitem__
 
 
 Migrating from 1.x
