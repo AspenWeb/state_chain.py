@@ -27,37 +27,24 @@ list of functions that operate on a shared state object. Algorithms defined
 this way are easy to arbitrarily modify at run time, and they provide cascading
 exception handling.
 
-To get started, define a state type, for example:
-
-    >>> from dataclasses import dataclass
-    >>> from typing import Optional
-    >>> @dataclass
-    ... class State:
-    ...     x: int = 0
-    ...     y: int = 0
-    ...     sum: int = 0
-    ...     exception: Optional[Exception] = None
-    ...
-
-
-Then create a :class:`StateChain` object:
+To get started, create a :class:`StateChain` object:
 
     >>> from state_chain import StateChain
-    >>> chain = StateChain(State)
+    >>> chain = StateChain()
 
 
 And add some functions to it:
 
     >>> @chain.add
-    ... def set_x(state: State):
+    ... def set_x(state):
     ...     state.x = 1
     ...
     >>> @chain.add
-    ... def set_y(state: State):
+    ... def set_y(state):
     ...     state.y = 2
     ...
     >>> @chain.add
-    ... def set_sum(state: State):
+    ... def set_sum(state):
     ...     state.sum = state.x + state.y
     ...
 
@@ -69,8 +56,7 @@ method.
 
 Speaking of the run method, let's give it a go:
 
-    >>> state = chain.run()
-    >>> state.sum
+    >>> chain.run().sum
     3
 
 Okay, we have the expected sum!
@@ -81,15 +67,15 @@ Modifying a State Chain
 
 Let's define three more functions to add to the state chain:
 
-    >>> def uh_oh(state: State):
+    >>> def uh_oh(state):
     ...     if state.x == 0:
     ...         raise Exception('oops, state.x is zero')
     ...
-    >>> def deal_with_it(state: State):
+    >>> def deal_with_it(state):
     ...     print("I am dealing with it!")
     ...     state.exception = None
     ...
-    >>> def print_state(state: State):
+    >>> def print_state(state):
     ...     print(state)
     ...
 
@@ -151,8 +137,9 @@ original chain.
 
 Either way, what happens when we run it?
 
-    >>> state = chain.run()
-    State(x=0, y=0, sum=0, exception=Exception('oops, state.x is zero'))
+    >>> from state_chain import Object
+    >>> state = chain.run(Object(x=0))
+    Object(x=0, exception=Exception('oops, state.x is zero'))
     I am dealing with it!
 
 
@@ -169,15 +156,15 @@ called, but ``set_x`` didn't.
 If we run without triggering the exception in ``uh_oh``, then we have a
 different result:
 
-    >>> _ = chain.run(State(x=1, y=5))
-    State(x=1, y=5, sum=0, exception=None)
+    >>> _ = chain.run(Object(x=5))
+    Object(x=1, exception=None)
 
 
 If we remove the ``deal_with_it`` function, then the exception isn't handled, so
 it's reraised at the end of the chain:
 
     >>> chain.remove('deal_with_it')
-    >>> chain.run()
+    >>> chain.run(Object(x=0))
     Traceback (most recent call last):
         ...
     Exception: oops, state.x is zero
@@ -192,7 +179,7 @@ been raised.
 
 The default value is 'unwanted', but you can change it when creating the chain:
 
-    >>> chain = StateChain(State, exception_preference='accepted')
+    >>> chain = StateChain(exception_preference='accepted')
 
 
 In that case, the chain's functions are always called, unless they were
@@ -209,8 +196,7 @@ explicitly added with a different exception preference:
     ...     state.x = -1
     ...     state.exception = None
     ...
-    >>> state = chain.run()
-    >>> state.x
+    >>> chain.run().x
     -1
 
 
@@ -226,7 +212,7 @@ For example:
     >>> def print_sum(x, y):
     ...     print(f"x + y = {x + y}")
     ...
-    >>> chain = StateChain(State, functions=[set_x, set_y, print_sum])
+    >>> chain = StateChain(functions=[set_x, set_y, print_sum])
     >>> _ = chain.run()
     x + y = 3
 
@@ -243,6 +229,38 @@ and 'required' otherwise.
 
 Argument injection is implemented in the :func:`call` function and relies on the
 standard library function :func:`inspect.signature` introduced in Python 3.3.
+
+
+Static Typing
++++++++++++++
+
+Since version 2.0, the `state_chain` module includes complete type annotations,
+and its API has been redesigned to facilitate type checking the applications
+that use it.
+
+Here is an example of a statically typed chain:
+
+    >>> from dataclasses import dataclass
+    >>> from typing import Optional
+    >>> @dataclass
+    ... class State:
+    ...     request: str
+    ...     response: Optional[str] = None
+    ...     exception: Optional[Exception] = None
+    ...
+    >>> def respond(state: State):
+    ...     if state.request.startswith("I want chocolate"):
+    ...         state.response = "Me too."
+    ...     else:
+    ...         state.response = "Sorry, I don't understand your request."
+    ...
+    >>> def match_punctuation(state: State):
+    ...     if state.response and state.request.endswith('!'):
+    ...         state.response = state.response.replace('.', '!')
+    ...
+    >>> chain = StateChain(State, [respond, match_punctuation])
+    >>> chain.run(State("I want chocolate!")).response
+    'Me too!'
 
 
 Aliases
@@ -273,7 +291,7 @@ from functools import partial
 from inspect import Parameter, Signature, signature
 import opcode
 import sys
-from types import CodeType, FunctionType
+from types import CodeType, FunctionType, SimpleNamespace
 from typing import (
     cast, Any, Callable, Dict, Generic, Iterable, List, NamedTuple, NoReturn,
     Optional, Tuple, TYPE_CHECKING, Type, TypeVar, Union
@@ -390,6 +408,29 @@ class _FunctionMapValue:
         return f"{self.__class__.__name__}({self.function!r}, {self.position!r})"
 
 
+class Object(SimpleNamespace):
+    """
+    A namespace that supports both attribute-style and dict-style lookups and
+    assignments. This is similar to a JavaScript object, hence the name.
+    """
+
+    def __init__(
+        self,
+        *d: Union[Dict[str, Any], Iterable[Tuple[str, Any]]],
+        **kw: Dict[str, Any],
+    ) -> None:
+        self.__dict__.update(*d, **kw)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.__dict__
+
+    def __getitem__(self, key: str) -> Any:
+        return self.__dict__[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.__dict__[key] = value
+
+
 class StateChain(Generic[State]):
     """Model an algorithm as a list of functions operating on a shared state.
 
@@ -409,7 +450,7 @@ class StateChain(Generic[State]):
 
     def __init__(
         self,
-        state_type: Type[State],
+        state_type: Type[State] = cast(Type[State], Object),
         functions: Iterable[ChainFunction] = (),
         raise_immediately: bool = False,
         exception_preference: ExceptionPref = 'unwanted',
