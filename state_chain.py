@@ -10,7 +10,7 @@ from typing import (
 )
 
 
-__version__ = '2.0.dev0'
+__version__ = '2.0rc1'
 
 
 if TYPE_CHECKING:
