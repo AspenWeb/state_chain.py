@@ -48,7 +48,7 @@ copyright = u'Chad Whitacre et al.'
 # built documents.
 #
 # The full version, including alpha/beta/rc tags.
-release = '1.5.0.dev0'
+release = '2.0.dev0'
 # The short X.Y version.
 version = '.'.join(release.split('.')[:2])
 
@@ -83,9 +83,14 @@ add_function_parentheses = False
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
 
+# Get rid of the need for `py:` prefixes everywhere.
+primary_domain = 'py'
+
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
 
+# Show type hints in the detailed list of arguments, not in the signature.
+autodoc_typehints = 'description'
 
 # -- Options for HTML output ---------------------------------------------------
 
@@ -93,9 +98,7 @@ pygments_style = 'sphinx'
 # a list of builtin themes.
 html_theme = 'default'
 
-intersphinx_mapping = { 'dependency_injection'
-                      : ('http://dependency-injection-py.readthedocs.org/en/latest/', None)
-                       }
+intersphinx_mapping = {}
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
